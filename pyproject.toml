@@ -3,18 +3,23 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "cube_shockfinder"
+name = "shockit"
 version = "0.1.0"
-description = "Offline shock finding on uniform 3D fluid cubes."
+description = "A Python toolkit for shock detection and characterization in simulation data."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
-authors = [{ name = "OpenAI Codex" }]
+authors = [{ name = "Hitesh Kishore Das" }]
 dependencies = [
   "numpy",
   "scipy",
   "h5py",
 ]
+
+[project.urls]
+Homepage = "https://github.com/HiteshKishoreDas/shockit"
+Repository = "https://github.com/HiteshKishoreDas/shockit"
+Issues = "https://github.com/HiteshKishoreDas/shockit/issues"
 
 [project.optional-dependencies]
 plots = [
@@ -26,10 +31,11 @@ dev = [
 ]
 
 [project.scripts]
-cube-shockfind = "cube_shockfinder.cli:main"
+shockit = "shockit.cli:main"
+shockit-find = "shockit.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["cube_shockfinder*"]
+include = ["shockit*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

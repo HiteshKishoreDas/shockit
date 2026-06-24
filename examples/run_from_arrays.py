@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from cube_shockfinder import FluidCube, ShockFinder, ShockFinderConfig
+from shockit import FluidCube, ShockFinder, ShockFinderConfig
 
 
 def main() -> None:

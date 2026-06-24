@@ -1,7 +1,7 @@
 import numpy as np
 
-from cube_shockfinder import FluidCube, ShockFinder, ShockFinderConfig
-from cube_shockfinder.mach import density_jump_from_mach, pressure_jump_from_mach
+from shockit import FluidCube, ShockFinder, ShockFinderConfig
+from shockit.mach import density_jump_from_mach, pressure_jump_from_mach
 
 
 def test_oblique_shock_detected_with_reasonable_normal_alignment(test_plotter) -> None:

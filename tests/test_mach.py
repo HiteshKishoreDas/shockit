@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from cube_shockfinder.mach import (
+from shockit.mach import (
     mach_from_pressure_jump,
     mach_from_temperature_jump,
     pressure_jump_from_mach,

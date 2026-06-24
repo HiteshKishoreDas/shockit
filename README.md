@@ -1,6 +1,8 @@
-# cube_shockfinder
+# ShocKit
 
-`cube_shockfinder` is a standalone Python package for offline shock finding on
+A Python toolkit for shock detection and characterization in simulation data.
+
+`shockit` is a standalone Python package for offline shock finding on
 already-extracted uniform 3D NumPy cubes of primitive hydrodynamic variables.
 The core algorithm is independent of AthenaK, yt, AMR, and HDF5. HDF5 support
 is provided through a small adapter layer.
@@ -20,7 +22,7 @@ pip install -e ".[dev]"
 
 ```python
 import numpy as np
-from cube_shockfinder import FluidCube, ShockFinder, ShockFinderConfig
+from shockit import FluidCube, ShockFinder, ShockFinderConfig
 
 cube = FluidCube(
     rho=rho,
@@ -43,7 +45,7 @@ shock_mask = result.shock_mask
 ## HDF5 CLI example
 
 ```bash
-cube-shockfind snapshot.h5 \
+shockit-find snapshot.h5 \
   --rho-field rho \
   --pressure-field press \
   --vx-field vel1 \
@@ -68,13 +70,13 @@ The implementation follows a Skillman-style workflow:
    - `grad_T . grad_S > 0` when enabled
    - `grad_T . grad_rho > 0` when enabled
 4. Build a shock normal from either the temperature or pressure gradient.
-5. Sample upstream and downstream states by walking along the dominant normal
-   axis with periodic wrapping.
+5. Sample upstream and downstream states with `sampling_method`:
+   - `nearest_axis` uses the dominant grid axis
+   - `trilinear` uses periodic trilinear interpolation and is experimental
 6. Require consistent pressure, temperature, and density jumps when enabled.
 7. Estimate Mach number from Rankine-Hugoniot jump relations.
 8. Keep cells that satisfy the zone criteria, jump criteria, and minimum Mach.
-9. Optionally reduce connected shock regions to the most compressive cell in
-   each component.
+9. Optionally reduce connected shock regions to representative center cells.
 
 ## Mach estimates
 
@@ -89,22 +91,26 @@ upstream/downstream cells and may be biased low or high.
 ## Public API
 
 - `FluidCube`: validated container for primitive fields and grid spacing
-- `ShockFinderConfig`: knobs for thresholds, jump requirements, and reduction
+- `ShockFinderConfig`: knobs for thresholds, jump requirements, center scoring,
+  and sampling mode
 - `ShockFinder`: main finder class
-- `load_fluid_cube_from_hdf5()`: adapter for top-level HDF5 datasets
+- `load_fluid_cube_from_hdf5()`: adapter for top-level or nested HDF5 datasets
 - `save_result_hdf5()`: save masks, jumps, Mach fields, normals, and summary
 
 ## Test suite
 
 The included tests cover:
 
+- package import and CLI parser smoke tests
 - Mach inversion accuracy
 - periodic gradients and divergence
 - planar shock detection
 - oblique shock detection
 - contact discontinuity rejection
 - a Sod-like fixture
-- HDF5 field loading
+- HDF5 field loading, including nested dataset paths
+- configuration and data validation
+- repository hygiene checks for stale names and absolute links
 
 Run them with:
 
@@ -137,8 +143,6 @@ another directory with `--plot-dir`.
 
 ## Examples
 
-See:
-
-- [examples/run_from_arrays.py](/Users/hitesh/hitesh/git/shockit/examples/run_from_arrays.py)
-- [examples/run_from_hdf5.py](/Users/hitesh/hitesh/git/shockit/examples/run_from_hdf5.py)
-- [examples/make_synthetic_planar_shock.py](/Users/hitesh/hitesh/git/shockit/examples/make_synthetic_planar_shock.py)
+- [examples/run_from_arrays.py](examples/run_from_arrays.py)
+- [examples/run_from_hdf5.py](examples/run_from_hdf5.py)
+- [examples/make_synthetic_planar_shock.py](examples/make_synthetic_planar_shock.py)

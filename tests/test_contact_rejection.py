@@ -1,6 +1,6 @@
 import numpy as np
 
-from cube_shockfinder import FluidCube, ShockFinder, ShockFinderConfig
+from shockit import FluidCube, ShockFinder, ShockFinderConfig
 
 
 def test_contact_discontinuity_is_rejected(test_plotter) -> None:

@@ -1,7 +1,7 @@
 import numpy as np
 
-from cube_shockfinder import FluidCube, ShockFinder, ShockFinderConfig
-from cube_shockfinder.mach import density_jump_from_mach, pressure_jump_from_mach
+from shockit import FluidCube, ShockFinder, ShockFinderConfig
+from shockit.mach import density_jump_from_mach, pressure_jump_from_mach
 
 
 def make_planar_shock_cube(mach: float = 2.0, n: int = 32) -> FluidCube:
@@ -58,3 +58,5 @@ def test_planar_shock_detected_near_interface(test_plotter) -> None:
     assert np.count_nonzero(nearby) > 0
     recovered = result.mach_pressure[result.shock_mask]
     np.testing.assert_allclose(np.median(recovered), 2.0, rtol=0.2)
+    assert result.summary["full_shock_cells"] >= result.summary["shock_cells"]
+    assert result.summary["full_mach_pressure_median"] >= 1.0

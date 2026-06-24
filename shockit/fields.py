@@ -24,6 +24,8 @@ class FluidCube:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        """Validate primitive fields and grid metadata for a uniform cube."""
+
         arrays = {
             "rho": np.asarray(self.rho, dtype=float),
             "pressure": np.asarray(self.pressure, dtype=float),
@@ -37,11 +39,17 @@ class FluidCube:
         for name, value in arrays.items():
             if value.shape != shape:
                 raise ValueError(f"Field {name} has shape {value.shape}, expected {shape}.")
+            if not np.all(np.isfinite(value)):
+                raise ValueError(f"Field {name} must contain only finite values.")
             setattr(self, name, value)
         if np.any(self.rho <= 0.0):
             raise ValueError("rho must be strictly positive.")
         if np.any(self.pressure <= 0.0):
             raise ValueError("pressure must be strictly positive.")
+        if not np.isfinite(self.dx) or not np.isfinite(self.dy) or not np.isfinite(self.dz):
+            raise ValueError("dx, dy, dz must be finite.")
+        if not np.isfinite(self.gamma):
+            raise ValueError("gamma must be finite.")
         if self.dx <= 0.0 or self.dy <= 0.0 or self.dz <= 0.0:
             raise ValueError("dx, dy, dz must be strictly positive.")
         if self.gamma <= 1.0:

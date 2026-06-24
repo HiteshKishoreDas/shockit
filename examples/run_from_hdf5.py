@@ -1,6 +1,6 @@
 """Minimal HDF5-based example."""
 
-from cube_shockfinder import ShockFinder, ShockFinderConfig, load_fluid_cube_from_hdf5, save_result_hdf5
+from shockit import ShockFinder, ShockFinderConfig, load_fluid_cube_from_hdf5, save_result_hdf5
 
 
 def main() -> None:

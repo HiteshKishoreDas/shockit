@@ -1,7 +1,7 @@
 Create a standalone Python package for offline shock finding in CFD simulation snapshots.
 
 Package name:
-cube_shockfinder
+shockit
 
 Core design philosophy:
 The shock finder should operate on already-extracted uniform 3D NumPy cubes of primitive fluid quantities. Do not make the core algorithm depend on AthenaK, yt, AMR, or HDF5. Instead, design a clean adapter layer that can read HDF5 files and convert fields into uniform 3D arrays. Later, yt can be used externally to interpolate/project SPH or AMR data onto uniform cubes, which can then be passed into this package.
@@ -27,7 +27,7 @@ Dependencies:
 * pytest
 
 Package structure:
-cube_shockfinder/
+shockit/
 **init**.py
 core.py
 fields.py
@@ -292,7 +292,7 @@ The user should be able to do:
 
 ```python
 import numpy as np
-from cube_shockfinder import FluidCube, ShockFinder, ShockFinderConfig
+from shockit import FluidCube, ShockFinder, ShockFinderConfig
 
 cube = FluidCube(
     rho=rho,
@@ -358,7 +358,7 @@ Implement save_result_hdf5(filename, result), writing:
 CLI:
 Implement command:
 
-cube-shockfind input.h5 --output shocks.h5
+shockit-find input.h5 --output shocks.h5
 
 Options:
 --rho-field
@@ -378,7 +378,7 @@ Options:
 --no-require-density-jump
 
 Example:
-cube-shockfind snapshot.h5 
+shockit-find snapshot.h5 
 --rho-field rho 
 --pressure-field press 
 --vx-field vel1 

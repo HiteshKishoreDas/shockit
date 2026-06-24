@@ -18,12 +18,37 @@ ALIASES = {
 }
 
 
+def _dataset_exists(handle: h5py.File, path: str) -> bool:
+    try:
+        return isinstance(handle[path], h5py.Dataset)
+    except KeyError:
+        return False
+
+
+def _find_dataset_by_basename(handle: h5py.File, basename: str) -> str | None:
+    found: str | None = None
+
+    def visitor(name: str, obj: h5py.Dataset) -> None:
+        nonlocal found
+        if found is not None:
+            return
+        if isinstance(obj, h5py.Dataset) and name.rsplit("/", maxsplit=1)[-1] == basename:
+            found = name
+
+    handle.visititems(visitor)
+    return found
+
+
 def _resolve_field_name(handle: h5py.File, explicit_name: str, aliases: Sequence[str]) -> str:
-    if explicit_name in handle:
+    if _dataset_exists(handle, explicit_name):
         return explicit_name
     for alias in aliases:
-        if alias in handle:
+        if _dataset_exists(handle, alias):
             return alias
+    for candidate in (explicit_name, *aliases):
+        found = _find_dataset_by_basename(handle, candidate)
+        if found is not None:
+            return found
     raise KeyError(f"Could not find any of these fields: {', '.join((explicit_name, *aliases))}")
 
 
@@ -39,7 +64,7 @@ def load_fluid_cube_from_hdf5(
     dz: float = 1.0,
     gamma: float = 5.0 / 3.0,
 ) -> FluidCube:
-    """Load a FluidCube from top-level HDF5 datasets."""
+    """Load a FluidCube from HDF5 datasets, including nested dataset paths."""
 
     with h5py.File(filename, "r") as handle:
         rho_name = _resolve_field_name(handle, rho_field, ALIASES["rho"])
@@ -57,5 +82,12 @@ def load_fluid_cube_from_hdf5(
             dy=dy,
             dz=dz,
             gamma=gamma,
-            metadata={"source_file": filename},
+            metadata={
+                "source_file": filename,
+                "rho_field": rho_name,
+                "pressure_field": pressure_name,
+                "vx_field": vx_name,
+                "vy_field": vy_name,
+                "vz_field": vz_name,
+            },
         )

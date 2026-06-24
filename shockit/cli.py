@@ -1,4 +1,4 @@
-"""Command-line entry point for cube_shockfinder."""
+"""Command-line entry point for shockit."""
 
 from __future__ import annotations
 
@@ -27,6 +27,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-mach", type=float, default=1.1)
     parser.add_argument("--shock-width-cells", type=int, default=1)
     parser.add_argument("--normal-field", choices=("temperature", "pressure"), default="temperature")
+    parser.add_argument("--center-score", choices=("compression", "mach_pressure", "mach_temperature", "combined"), default="compression")
+    parser.add_argument("--sampling-method", choices=("nearest_axis", "trilinear"), default="nearest_axis")
     parser.add_argument("--no-reduce-to-centers", action="store_true")
     parser.add_argument("--no-require-gradT-gradRho", action="store_true")
     parser.add_argument("--no-require-density-jump", action="store_true")
@@ -34,7 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
-    """Run the cube-shockfind CLI."""
+    """Run the shockit CLI."""
 
     args = build_parser().parse_args()
     cube = load_fluid_cube_from_hdf5(
@@ -53,6 +55,8 @@ def main() -> None:
         min_mach=args.min_mach,
         shock_width_cells=args.shock_width_cells,
         normal_field=args.normal_field,
+        center_score=args.center_score,
+        sampling_method=args.sampling_method,
         reduce_to_centers=not args.no_reduce_to_centers,
         require_gradT_gradRho_alignment=not args.no_require_gradT_gradRho,
         require_density_jump=not args.no_require_density_jump,

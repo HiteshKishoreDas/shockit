@@ -1,6 +1,6 @@
 import numpy as np
 
-from cube_shockfinder.gradients import divergence, periodic_derivative
+from shockit.gradients import divergence, periodic_derivative
 
 
 def test_periodic_derivative_matches_sine(test_plotter) -> None:

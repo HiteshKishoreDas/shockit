@@ -1,6 +1,6 @@
 import numpy as np
 
-from cube_shockfinder import FluidCube, ShockFinder, ShockFinderConfig
+from shockit import FluidCube, ShockFinder, ShockFinderConfig
 
 
 def test_sod_like_setup_finds_shock_more_than_contact(test_plotter) -> None:
