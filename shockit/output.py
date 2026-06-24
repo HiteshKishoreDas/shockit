@@ -7,7 +7,7 @@ from importlib.metadata import PackageNotFoundError, version
 import h5py
 import numpy as np
 
-from .finder import ShockFinderResult
+from .result import ShockFinderResult
 
 
 def _package_version() -> str:
@@ -17,10 +17,18 @@ def _package_version() -> str:
         return "0+unknown"
 
 
+MASK_DESCRIPTIONS = {
+    "shock_zone_mask": "Local compression and gradient-alignment candidate zone.",
+    "full_shock_mask": "Unreduced shock cells that also pass jump and Mach filtering.",
+    "shock_mask": "Final public mask; may be center-reduced relative to full_shock_mask.",
+}
+
+
 def _write_mask_dataset(handle: h5py.File, name: str, mask: np.ndarray) -> None:
     dataset = handle.create_dataset(name, data=mask.astype(bool), dtype=np.bool_)
     dataset.attrs["semantic_type"] = "boolean_mask"
     dataset.attrs["stored_dtype"] = str(dataset.dtype)
+    dataset.attrs["description"] = MASK_DESCRIPTIONS[name]
 
 
 def save_result_hdf5(filename: str, result: ShockFinderResult) -> None:

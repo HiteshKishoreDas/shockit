@@ -18,6 +18,10 @@ ALIASES = {
 }
 
 
+class AmbiguousFieldError(KeyError):
+    """Raised when recursive basename resolution finds multiple datasets."""
+
+
 def _dataset_exists(handle: h5py.File, path: str) -> bool:
     try:
         return isinstance(handle[path], h5py.Dataset)
@@ -25,15 +29,12 @@ def _dataset_exists(handle: h5py.File, path: str) -> bool:
         return False
 
 
-def _find_dataset_by_basename(handle: h5py.File, basename: str) -> str | None:
-    found: str | None = None
+def _find_datasets_by_basename(handle: h5py.File, basename: str) -> list[str]:
+    found: list[str] = []
 
     def visitor(name: str, obj: h5py.Dataset) -> None:
-        nonlocal found
-        if found is not None:
-            return
         if isinstance(obj, h5py.Dataset) and name.rsplit("/", maxsplit=1)[-1] == basename:
-            found = name
+            found.append(name)
 
     handle.visititems(visitor)
     return found
@@ -46,9 +47,15 @@ def _resolve_field_name(handle: h5py.File, explicit_name: str, aliases: Sequence
         if _dataset_exists(handle, alias):
             return alias
     for candidate in (explicit_name, *aliases):
-        found = _find_dataset_by_basename(handle, candidate)
-        if found is not None:
-            return found
+        matches = _find_datasets_by_basename(handle, candidate)
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            match_list = ", ".join(matches)
+            raise AmbiguousFieldError(
+                f"Ambiguous dataset basename '{candidate}' matched multiple paths: {match_list}. "
+                "Pass an explicit dataset path such as 'group/field'."
+            )
     raise KeyError(f"Could not find any of these fields: {', '.join((explicit_name, *aliases))}")
 
 

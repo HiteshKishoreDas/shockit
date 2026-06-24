@@ -1,33 +1,12 @@
 import numpy as np
 
-from shockit import FluidCube, ShockFinder, ShockFinderConfig
-from shockit.mach import density_jump_from_mach, pressure_jump_from_mach
+from shockit import ShockFinder, ShockFinderConfig
+from tests.helpers import make_oblique_shock_cube
 
 
 def test_oblique_shock_detected_with_reasonable_normal_alignment(test_plotter) -> None:
-    n = 24
-    gamma = 5.0 / 3.0
-    mach = 2.0
-    rho1 = 1.0
-    p1 = 1.0
-    rjump = density_jump_from_mach(mach, gamma)
-    pjump = pressure_jump_from_mach(mach, gamma)
-    rho2 = rho1 * rjump
-    p2 = p1 * pjump
-
-    x = np.arange(n)
-    y = np.arange(n)
-    z = np.arange(n)
-    xx, yy, zz = np.meshgrid(x, y, z, indexing="ij")
-    signed_distance = (xx + yy) - n
-
-    rho = np.where(signed_distance >= 0, rho2, rho1).astype(float)
-    pressure = np.where(signed_distance >= 0, p2, p1).astype(float)
-    vx = np.where(signed_distance >= 0, 0.5, 2.0).astype(float)
-    vy = np.where(signed_distance >= 0, 0.5, 2.0).astype(float)
-    vz = np.zeros((n, n, n))
-
-    cube = FluidCube(rho=rho, pressure=pressure, vx=vx, vy=vy, vz=vz, gamma=gamma)
+    cube = make_oblique_shock_cube()
+    n = cube.rho.shape[0]
     result = ShockFinder(ShockFinderConfig(reduce_to_centers=False)).find(cube)
     test_plotter.save_slice(
         "oblique_pressure_midplane",

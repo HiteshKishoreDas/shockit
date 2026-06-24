@@ -72,11 +72,17 @@ The implementation follows a Skillman-style workflow:
 4. Build a shock normal from either the temperature or pressure gradient.
 5. Sample upstream and downstream states with `sampling_method`:
    - `nearest_axis` uses the dominant grid axis
-   - `trilinear` uses periodic trilinear interpolation and is experimental
+   - `trilinear` uses periodic trilinear interpolation on candidate cells only
 6. Require consistent pressure, temperature, and density jumps when enabled.
 7. Estimate Mach number from Rankine-Hugoniot jump relations.
 8. Keep cells that satisfy the zone criteria, jump criteria, and minimum Mach.
 9. Optionally reduce connected shock regions to representative center cells.
+
+Mask semantics:
+
+- `shock_zone_mask`: local compression and gradient-alignment candidate zone
+- `full_shock_mask`: unreduced shock cells that pass jump and Mach filtering
+- `shock_mask`: final public mask and may be center-reduced
 
 ## Mach estimates
 
@@ -94,7 +100,8 @@ upstream/downstream cells and may be biased low or high.
 - `ShockFinderConfig`: knobs for thresholds, jump requirements, center scoring,
   and sampling mode
 - `ShockFinder`: main finder class
-- `load_fluid_cube_from_hdf5()`: adapter for top-level or nested HDF5 datasets
+- `load_fluid_cube_from_hdf5()`: adapter for explicit paths, top-level aliases,
+  and unique nested dataset basenames
 - `save_result_hdf5()`: save masks, jumps, Mach fields, normals, and summary
 
 ## Test suite

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import argparse
 
-from .finder import ShockFinder, ShockFinderConfig
+from .config import ShockFinderConfig
+from .finder import ShockFinder
 from .io_hdf5 import load_fluid_cube_from_hdf5
 from .output import save_result_hdf5
 

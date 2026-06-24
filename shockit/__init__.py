@@ -2,10 +2,12 @@
 
 from importlib.metadata import PackageNotFoundError, version
 
+from .config import ShockFinderConfig
 from .fields import FluidCube
-from .finder import ShockFinder, ShockFinderConfig, ShockFinderResult
+from .finder import ShockFinder
 from .io_hdf5 import load_fluid_cube_from_hdf5
 from .output import save_result_hdf5
+from .result import ShockFinderResult
 
 try:
     __version__ = version("shockit")

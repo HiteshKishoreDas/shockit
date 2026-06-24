@@ -1,31 +1,7 @@
 import numpy as np
 
 from shockit import FluidCube, ShockFinder, ShockFinderConfig
-from shockit.mach import density_jump_from_mach, pressure_jump_from_mach
-
-
-def make_planar_shock_cube(mach: float = 2.0, n: int = 32) -> FluidCube:
-    gamma = 5.0 / 3.0
-    rho1 = 1.0
-    p1 = 1.0
-    rjump = density_jump_from_mach(mach, gamma)
-    pjump = pressure_jump_from_mach(mach, gamma)
-    rho2 = rho1 * rjump
-    p2 = p1 * pjump
-    vx1 = mach * np.sqrt(gamma * p1 / rho1)
-    vx2 = vx1 / rjump
-
-    rho = np.full((n, n, n), rho1)
-    pressure = np.full((n, n, n), p1)
-    vx = np.full((n, n, n), vx1)
-    vy = np.zeros((n, n, n))
-    vz = np.zeros((n, n, n))
-
-    mid = n // 2
-    rho[mid:, :, :] = rho2
-    pressure[mid:, :, :] = p2
-    vx[mid:, :, :] = vx2
-    return FluidCube(rho=rho, pressure=pressure, vx=vx, vy=vy, vz=vz, gamma=gamma)
+from tests.helpers import make_planar_shock_cube
 
 
 def test_planar_shock_detected_near_interface(test_plotter) -> None:

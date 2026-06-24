@@ -68,13 +68,14 @@ def sample_jumps(
     nz: np.ndarray,
     width: int,
     method: str = "nearest_axis",
+    candidate_mask: np.ndarray | None = None,
 ) -> SampledJumps:
     """Sample upstream/downstream jump ratios across a candidate shock."""
 
     if method == "nearest_axis":
         return _sample_jumps_nearest_axis(pressure, temperature, rho, nx, ny, nz, width)
     if method == "trilinear":
-        return _sample_jumps_trilinear(pressure, temperature, rho, nx, ny, nz, width)
+        return _sample_jumps_trilinear(pressure, temperature, rho, nx, ny, nz, width, candidate_mask=candidate_mask)
     raise ValueError(f"Unsupported sampling method: {method}")
 
 
@@ -105,27 +106,25 @@ def _sample_jumps_nearest_axis(
     rho_up = np.where(downstream_is_plus, rho_minus, rho_plus)
 
     return SampledJumps(
-        pressure_jump=pressure_down / pressure_up,
-        temperature_jump=temperature_down / temperature_up,
-        density_jump=rho_down / rho_up,
+        pressure_jump=_safe_ratio(pressure_down, pressure_up),
+        temperature_jump=_safe_ratio(temperature_down, temperature_up),
+        density_jump=_safe_ratio(rho_down, rho_up),
         pressure_up=pressure_up,
         pressure_down=pressure_down,
     )
 
 
-def _coordinate_grid(shape: tuple[int, int, int]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    return np.meshgrid(
-        np.arange(shape[0], dtype=float),
-        np.arange(shape[1], dtype=float),
-        np.arange(shape[2], dtype=float),
-        indexing="ij",
-    )
+def _safe_ratio(numerator: np.ndarray, denominator: np.ndarray) -> np.ndarray:
+    valid = np.isfinite(numerator) & np.isfinite(denominator) & (denominator > 0.0)
+    ratio = np.full(numerator.shape, np.nan, dtype=float)
+    ratio[valid] = numerator[valid] / denominator[valid]
+    return ratio
 
 
-def _sample_trilinear(field: np.ndarray, coordinates: tuple[np.ndarray, np.ndarray, np.ndarray]) -> np.ndarray:
-    stacked = np.vstack([axis.reshape(1, -1) for axis in coordinates])
+def _sample_trilinear_points(field: np.ndarray, coordinates: tuple[np.ndarray, np.ndarray, np.ndarray]) -> np.ndarray:
+    stacked = np.vstack(coordinates)
     sampled = map_coordinates(field, stacked, order=1, mode="wrap")
-    return sampled.reshape(field.shape)
+    return np.asarray(sampled, dtype=float)
 
 
 def _sample_jumps_trilinear(
@@ -136,31 +135,52 @@ def _sample_jumps_trilinear(
     ny: np.ndarray,
     nz: np.ndarray,
     width: int,
+    candidate_mask: np.ndarray | None,
 ) -> SampledJumps:
     """Sample jump ratios by trilinear interpolation along the local normal."""
 
-    base_x, base_y, base_z = _coordinate_grid(pressure.shape)
-    offset_x = width * nx
-    offset_y = width * ny
-    offset_z = width * nz
+    active_mask = np.ones(pressure.shape, dtype=bool) if candidate_mask is None else candidate_mask.astype(bool, copy=False)
+    active_indices = np.argwhere(active_mask)
+    empty = np.full(pressure.shape, np.nan, dtype=float)
+    if active_indices.size == 0:
+        return SampledJumps(
+            pressure_jump=empty.copy(),
+            temperature_jump=empty.copy(),
+            density_jump=empty.copy(),
+            pressure_up=empty.copy(),
+            pressure_down=empty.copy(),
+        )
 
-    plus_coordinates = (
-        base_x + offset_x,
-        base_y + offset_y,
-        base_z + offset_z,
-    )
-    minus_coordinates = (
-        base_x - offset_x,
-        base_y - offset_y,
-        base_z - offset_z,
-    )
+    base_x = active_indices[:, 0].astype(float)
+    base_y = active_indices[:, 1].astype(float)
+    base_z = active_indices[:, 2].astype(float)
+    offset_x = width * nx[active_mask]
+    offset_y = width * ny[active_mask]
+    offset_z = width * nz[active_mask]
 
-    pressure_plus = _sample_trilinear(pressure, plus_coordinates)
-    pressure_minus = _sample_trilinear(pressure, minus_coordinates)
-    temperature_plus = _sample_trilinear(temperature, plus_coordinates)
-    temperature_minus = _sample_trilinear(temperature, minus_coordinates)
-    rho_plus = _sample_trilinear(rho, plus_coordinates)
-    rho_minus = _sample_trilinear(rho, minus_coordinates)
+    plus_coordinates = (base_x + offset_x, base_y + offset_y, base_z + offset_z)
+    minus_coordinates = (base_x - offset_x, base_y - offset_y, base_z - offset_z)
+
+    pressure_plus_values = _sample_trilinear_points(pressure, plus_coordinates)
+    pressure_minus_values = _sample_trilinear_points(pressure, minus_coordinates)
+    temperature_plus_values = _sample_trilinear_points(temperature, plus_coordinates)
+    temperature_minus_values = _sample_trilinear_points(temperature, minus_coordinates)
+    rho_plus_values = _sample_trilinear_points(rho, plus_coordinates)
+    rho_minus_values = _sample_trilinear_points(rho, minus_coordinates)
+
+    pressure_plus = empty.copy()
+    pressure_minus = empty.copy()
+    temperature_plus = empty.copy()
+    temperature_minus = empty.copy()
+    rho_plus = empty.copy()
+    rho_minus = empty.copy()
+
+    pressure_plus[active_mask] = pressure_plus_values
+    pressure_minus[active_mask] = pressure_minus_values
+    temperature_plus[active_mask] = temperature_plus_values
+    temperature_minus[active_mask] = temperature_minus_values
+    rho_plus[active_mask] = rho_plus_values
+    rho_minus[active_mask] = rho_minus_values
 
     downstream_is_plus = pressure_plus >= pressure_minus
     pressure_down = np.where(downstream_is_plus, pressure_plus, pressure_minus)
@@ -171,9 +191,9 @@ def _sample_jumps_trilinear(
     rho_up = np.where(downstream_is_plus, rho_minus, rho_plus)
 
     return SampledJumps(
-        pressure_jump=pressure_down / pressure_up,
-        temperature_jump=temperature_down / temperature_up,
-        density_jump=rho_down / rho_up,
+        pressure_jump=_safe_ratio(pressure_down, pressure_up),
+        temperature_jump=_safe_ratio(temperature_down, temperature_up),
+        density_jump=_safe_ratio(rho_down, rho_up),
         pressure_up=pressure_up,
         pressure_down=pressure_down,
     )
