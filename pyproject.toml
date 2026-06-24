@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cube_shockfinder"
+version = "0.1.0"
+description = "Offline shock finding on uniform 3D fluid cubes."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "OpenAI Codex" }]
+dependencies = [
+  "numpy",
+  "scipy",
+  "h5py",
+]
+
+[project.optional-dependencies]
+plots = [
+  "matplotlib",
+]
+dev = [
+  "pytest",
+  "matplotlib",
+]
+
+[project.scripts]
+cube-shockfind = "cube_shockfinder.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["cube_shockfinder*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
