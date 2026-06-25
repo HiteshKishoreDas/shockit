@@ -36,4 +36,6 @@ def test_compute_mach_fields_skips_temperature_inversion_outside_candidate_mask(
 
     assert len(seen) == int(np.count_nonzero(candidate_mask))
     assert np.isfinite(fields.mach_temperature[candidate_mask]).all()
+    assert np.isfinite(fields.mach_pressure[candidate_mask]).all()
+    assert np.isnan(fields.mach_pressure[~candidate_mask]).all()
     assert np.isnan(fields.mach_temperature[~candidate_mask]).all()

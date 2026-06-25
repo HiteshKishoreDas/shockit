@@ -70,6 +70,8 @@ Two Mach estimates are computed:
 - `mach_temperature` from inversion of the temperature jump
 
 Cells pass the Mach filter if either estimate is at least `min_mach`.
+Mach fields are only meaningful inside `shock_zone_mask`/`full_shock_mask`;
+outside candidate regions they may be `NaN`.
 
 ## Mask semantics
 

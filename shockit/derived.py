@@ -132,6 +132,8 @@ def compute_mach_fields(
     shape = jumps.pressure_jump.shape
     mach_pressure = np.full(shape, np.nan, dtype=float)
     valid_pressure = jumps.pressure_jump > 1.0
+    if candidate_mask is not None:
+        valid_pressure &= candidate_mask
     if np.any(valid_pressure):
         mach_pressure[valid_pressure] = np.sqrt(
             ((jumps.pressure_jump[valid_pressure] * (gamma + 1.0)) + (gamma - 1.0)) / (2.0 * gamma)
