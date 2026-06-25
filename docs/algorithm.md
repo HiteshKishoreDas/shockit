@@ -37,12 +37,19 @@ depending on `normal_field`.
 
 `shockit` samples states one or more cells away along the chosen normal.
 
-- `nearest_axis`: step along the dominant normal axis
+- `nearest_axis`: step along the dominant normal axis using periodic array
+  rolls over the whole cube
 - `trilinear`: interpolate along the full normal using periodic trilinear
-  sampling
+  sampling on candidate cells only, then scatter the results back into full
+  arrays
 
 For each candidate cell, the higher-pressure side is treated as downstream and
 the lower-pressure side as upstream.
+
+`nearest_axis` is simple and memory-predictable, but it is not candidate-only.
+`trilinear` is candidate-only and better matched to oblique normals, but it is
+more specialized. For large production snapshots, default to `nearest_axis`
+unless oblique-shock normal sampling is specifically needed.
 
 ## Jump filtering
 

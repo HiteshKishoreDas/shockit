@@ -18,9 +18,14 @@ def _package_version() -> str:
 
 
 MASK_DESCRIPTIONS = {
-    "shock_zone_mask": "Local compression and gradient-alignment candidate zone.",
-    "full_shock_mask": "Unreduced shock cells that also pass jump and Mach filtering.",
-    "shock_mask": "Final public mask; may be center-reduced relative to full_shock_mask.",
+    "shock_zone_mask": "Compression/gradient candidate mask before jump and Mach filtering.",
+    "full_shock_mask": "Unreduced shock cells after jump and Mach filtering.",
+    "shock_mask": "Final public shock mask; may be center-reduced.",
+}
+
+MACH_DESCRIPTIONS = {
+    "mach_pressure": "Local Mach estimate from pressure jump.",
+    "mach_temperature": "Local Mach estimate from temperature jump.",
 }
 
 
@@ -31,6 +36,10 @@ def _write_mask_dataset(handle: h5py.File, name: str, mask: np.ndarray) -> None:
     dataset.attrs["description"] = MASK_DESCRIPTIONS[name]
 
 
+def _write_field_dataset(handle: h5py.File, name: str, values: np.ndarray) -> h5py.Dataset:
+    return handle.create_dataset(name, data=values)
+
+
 def save_result_hdf5(filename: str, result: ShockFinderResult) -> None:
     """Persist shock-finder outputs to an HDF5 file."""
 
@@ -39,18 +48,20 @@ def save_result_hdf5(filename: str, result: ShockFinderResult) -> None:
         _write_mask_dataset(handle, "shock_zone_mask", result.shock_zone_mask)
         if result.full_shock_mask is not None:
             _write_mask_dataset(handle, "full_shock_mask", result.full_shock_mask)
-        handle.create_dataset("mach_temperature", data=result.mach_temperature)
-        handle.create_dataset("mach_pressure", data=result.mach_pressure)
-        handle.create_dataset("compression", data=result.compression)
-        handle.create_dataset("div_v", data=result.div_v)
-        handle.create_dataset("temperature", data=result.temperature)
-        handle.create_dataset("entropy", data=result.entropy)
-        handle.create_dataset("temperature_jump", data=result.temperature_jump)
-        handle.create_dataset("pressure_jump", data=result.pressure_jump)
-        handle.create_dataset("density_jump", data=result.density_jump)
-        handle.create_dataset("normal_x", data=result.normal_x)
-        handle.create_dataset("normal_y", data=result.normal_y)
-        handle.create_dataset("normal_z", data=result.normal_z)
+        mach_temperature = _write_field_dataset(handle, "mach_temperature", result.mach_temperature)
+        mach_pressure = _write_field_dataset(handle, "mach_pressure", result.mach_pressure)
+        mach_temperature.attrs["description"] = MACH_DESCRIPTIONS["mach_temperature"]
+        mach_pressure.attrs["description"] = MACH_DESCRIPTIONS["mach_pressure"]
+        _write_field_dataset(handle, "compression", result.compression)
+        _write_field_dataset(handle, "div_v", result.div_v)
+        _write_field_dataset(handle, "temperature", result.temperature)
+        _write_field_dataset(handle, "entropy", result.entropy)
+        _write_field_dataset(handle, "temperature_jump", result.temperature_jump)
+        _write_field_dataset(handle, "pressure_jump", result.pressure_jump)
+        _write_field_dataset(handle, "density_jump", result.density_jump)
+        _write_field_dataset(handle, "normal_x", result.normal_x)
+        _write_field_dataset(handle, "normal_y", result.normal_y)
+        _write_field_dataset(handle, "normal_z", result.normal_z)
         handle.attrs["package_name"] = "shockit"
         handle.attrs["package_version"] = _package_version()
         handle.attrs["mach_field_note"] = "Mach fields are local cell estimates from sampled jump conditions."

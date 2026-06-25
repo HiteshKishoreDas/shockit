@@ -71,7 +71,7 @@ The implementation follows a Skillman-style workflow:
    - `grad_T . grad_rho > 0` when enabled
 4. Build a shock normal from either the temperature or pressure gradient.
 5. Sample upstream and downstream states with `sampling_method`:
-   - `nearest_axis` uses the dominant grid axis
+   - `nearest_axis` uses the dominant grid axis and periodic whole-cube array rolls
    - `trilinear` uses periodic trilinear interpolation on candidate cells only
 6. Require consistent pressure, temperature, and density jumps when enabled.
 7. Estimate Mach number from Rankine-Hugoniot jump relations.
@@ -83,6 +83,11 @@ Mask semantics:
 - `shock_zone_mask`: local compression and gradient-alignment candidate zone
 - `full_shock_mask`: unreduced shock cells that pass jump and Mach filtering
 - `shock_mask`: final public mask and may be center-reduced
+
+`nearest_axis` is simple and memory-predictable, but it is not candidate-only.
+`trilinear` samples candidate cells only and is useful when oblique-shock
+normal sampling is specifically needed. For large production snapshots, default
+to `nearest_axis` unless you need that oblique sampling behavior.
 
 ## Mach estimates
 
@@ -103,6 +108,10 @@ upstream/downstream cells and may be biased low or high.
 - `load_fluid_cube_from_hdf5()`: adapter for explicit paths, top-level aliases,
   and unique nested dataset basenames
 - `save_result_hdf5()`: save masks, jumps, Mach fields, normals, and summary
+
+## Manual review
+
+- [docs/review_map.md](docs/review_map.md): file-by-file map for manual review
 
 ## Test suite
 

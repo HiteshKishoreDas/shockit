@@ -16,4 +16,14 @@ def test_output_hdf5_masks_include_descriptions(tmp_path) -> None:
         assert "description" in handle["shock_zone_mask"].attrs
         assert "description" in handle["full_shock_mask"].attrs
         assert "description" in handle["shock_mask"].attrs
-        assert handle["shock_mask"].attrs["description"].startswith("Final public mask")
+        assert "description" in handle["mach_pressure"].attrs
+        assert "description" in handle["mach_temperature"].attrs
+        assert handle["shock_mask"].attrs["description"] == "Final public shock mask; may be center-reduced."
+        assert handle["shock_zone_mask"].attrs["description"] == (
+            "Compression/gradient candidate mask before jump and Mach filtering."
+        )
+        assert handle["full_shock_mask"].attrs["description"] == (
+            "Unreduced shock cells after jump and Mach filtering."
+        )
+        assert handle["mach_pressure"].attrs["description"] == "Local Mach estimate from pressure jump."
+        assert handle["mach_temperature"].attrs["description"] == "Local Mach estimate from temperature jump."

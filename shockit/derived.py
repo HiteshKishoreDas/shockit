@@ -121,7 +121,12 @@ def compute_normals(gradients: GradientFields, normal_field: str) -> NormalField
     )
 
 
-def compute_mach_fields(jumps: SampledJumps, gamma: float, mach_max: float) -> MachFields:
+def compute_mach_fields(
+    jumps: SampledJumps,
+    gamma: float,
+    mach_max: float,
+    candidate_mask: np.ndarray | None = None,
+) -> MachFields:
     """Compute Mach estimates from pressure and temperature jumps."""
 
     shape = jumps.pressure_jump.shape
@@ -134,6 +139,8 @@ def compute_mach_fields(jumps: SampledJumps, gamma: float, mach_max: float) -> M
 
     mach_temperature = np.full(shape, np.nan, dtype=float)
     valid_temperature = jumps.temperature_jump > 1.0
+    if candidate_mask is not None:
+        valid_temperature &= candidate_mask
     if np.any(valid_temperature):
         values = [
             mach_from_temperature_jump(value, gamma, mach_max=mach_max)

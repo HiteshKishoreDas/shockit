@@ -35,7 +35,12 @@ class ShockFinder:
             method=self.config.sampling_method,
             candidate_mask=shock_zone_mask,
         )
-        mach_fields = compute_mach_fields(jumps, cube.gamma, mach_max=self.config.mach_max)
+        mach_fields = compute_mach_fields(
+            jumps,
+            cube.gamma,
+            mach_max=self.config.mach_max,
+            candidate_mask=shock_zone_mask,
+        )
         full_shock_mask = build_final_shock_mask(shock_zone_mask, jumps, mach_fields, self.config)
         if self.config.reduce_to_centers:
             shock_mask, _ = reduce_to_centers(
