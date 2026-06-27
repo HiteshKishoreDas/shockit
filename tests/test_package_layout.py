@@ -26,12 +26,28 @@ def test_cli_parser_smoke() -> None:
     from shockit.cli import build_parser
 
     args = build_parser().parse_args(
-        ["snapshot.h5", "--output", "shocks.h5", "--center-score", "combined", "--sampling-method", "nearest_axis"]
+        [
+            "snapshot.h5",
+            "--output",
+            "shocks.h5",
+            "--quiet",
+            "--chunk-size",
+            "64",
+            "--center-score",
+            "combined",
+            "--sampling-method",
+            "nearest_axis",
+            "--upstream-pressure-floor",
+            "1e-6",
+        ]
     )
     assert args.input == "snapshot.h5"
     assert args.output == "shocks.h5"
+    assert args.quiet is True
+    assert args.chunk_size == 64
     assert args.center_score == "combined"
     assert args.sampling_method == "nearest_axis"
+    assert args.upstream_pressure_floor == pytest.approx(1e-6)
 
 
 @pytest.mark.parametrize("center_score", ["compression", "mach_pressure", "mach_temperature", "combined"])

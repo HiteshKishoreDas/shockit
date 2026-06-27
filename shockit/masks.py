@@ -46,6 +46,7 @@ def build_final_shock_mask(
     jumps: SampledJumps,
     mach_fields: MachFields,
     config: ShockFinderConfig,
+    gamma: float,
 ) -> np.ndarray:
     """Build the unreduced shock mask after jump and Mach filtering."""
 
@@ -56,6 +57,8 @@ def build_final_shock_mask(
         jump_mask &= jumps.temperature_jump > 1.0
     if config.require_density_jump:
         jump_mask &= jumps.density_jump > 1.0
+    jump_mask &= _physical_jump_mask(jumps, gamma)
+    jump_mask &= _upstream_floor_mask(jumps, config)
 
     mach_mask = np.nan_to_num(mach_fields.mach_pressure, nan=-np.inf) >= config.min_mach
     mach_mask |= np.nan_to_num(mach_fields.mach_temperature, nan=-np.inf) >= config.min_mach
@@ -75,11 +78,29 @@ def reduce_to_centers(
         return np.zeros_like(shock_mask, dtype=bool), 0
 
     reduced = np.zeros_like(shock_mask, dtype=bool)
-    for label in range(1, count + 1):
-        component = labels == label
-        score = center_score(component, div_v, mach_fields, center_score_mode)
+    simple_score_field = _simple_center_score_field(div_v, mach_fields, center_score_mode)
+    if simple_score_field is not None:
+        positions = ndimage.maximum_position(simple_score_field, labels=labels, index=np.arange(1, count + 1))
+        for position in positions:
+            reduced[position] = True
+        return reduced, count
+
+    label_slices = ndimage.find_objects(labels)
+    for label, component_slice in enumerate(label_slices, start=1):
+        if component_slice is None:
+            continue
+        component = labels[component_slice] == label
+        local_mach_fields = MachFields(
+            mach_pressure=mach_fields.mach_pressure[component_slice],
+            mach_temperature=mach_fields.mach_temperature[component_slice],
+        )
+        score = center_score(component, div_v[component_slice], local_mach_fields, center_score_mode)
         best_flat_index = int(np.argmax(score))
-        best_index = np.unravel_index(best_flat_index, score.shape)
+        best_local_index = np.unravel_index(best_flat_index, score.shape)
+        best_index = tuple(
+            component_slice[axis].start + best_local_index[axis]
+            for axis in range(len(best_local_index))
+        )
         reduced[best_index] = True
     return reduced, count
 
@@ -127,3 +148,50 @@ def _normalize_component_values(values: np.ndarray, component: np.ndarray) -> np
 
     normalized[finite_component] = (component_values - vmin) / (vmax - vmin)
     return normalized
+
+
+def _simple_center_score_field(
+    div_v: np.ndarray,
+    mach_fields: MachFields,
+    mode: str,
+) -> np.ndarray | None:
+    """Return a direct score field for modes that do not need per-component normalization."""
+
+    if mode == "compression":
+        return -div_v
+    if mode == "mach_pressure":
+        return np.nan_to_num(mach_fields.mach_pressure, nan=-np.inf)
+    if mode == "mach_temperature":
+        return np.nan_to_num(mach_fields.mach_temperature, nan=-np.inf)
+    return None
+
+
+def _physical_jump_mask(jumps: SampledJumps, gamma: float) -> np.ndarray:
+    """Reject jump combinations that violate simple ideal-gas shock relations."""
+
+    density_limit = (gamma + 1.0) / (gamma - 1.0)
+    valid_density = np.isfinite(jumps.density_jump) & (jumps.density_jump <= density_limit)
+    expected_temperature = np.full(jumps.pressure_jump.shape, np.nan, dtype=float)
+    valid_expected = np.isfinite(jumps.pressure_jump) & np.isfinite(jumps.density_jump) & (jumps.density_jump > 0.0)
+    expected_temperature[valid_expected] = jumps.pressure_jump[valid_expected] / jumps.density_jump[valid_expected]
+    consistent_triplet = np.isclose(
+        jumps.temperature_jump,
+        expected_temperature,
+        rtol=0.25,
+        atol=0.0,
+        equal_nan=False,
+    )
+    return valid_density & consistent_triplet
+
+
+def _upstream_floor_mask(jumps: SampledJumps, config: ShockFinderConfig) -> np.ndarray:
+    """Optionally reject jumps whose upstream sampled state falls below configured floors."""
+
+    valid = np.ones(jumps.pressure_jump.shape, dtype=bool)
+    if config.upstream_pressure_floor is not None:
+        valid &= np.isfinite(jumps.pressure_up) & (jumps.pressure_up >= config.upstream_pressure_floor)
+    if config.upstream_temperature_floor is not None:
+        valid &= np.isfinite(jumps.temperature_up) & (jumps.temperature_up >= config.upstream_temperature_floor)
+    if config.upstream_density_floor is not None:
+        valid &= np.isfinite(jumps.density_up) & (jumps.density_up >= config.upstream_density_floor)
+    return valid

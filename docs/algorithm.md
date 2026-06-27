@@ -62,6 +62,18 @@ Sampled jump ratios are:
 `full_shock_mask` keeps only `shock_zone_mask` cells that satisfy the enabled
 jump filters and the minimum Mach threshold.
 
+Additional physical rejection is always applied before a cell enters
+`full_shock_mask`:
+
+- `density_jump` must not exceed the ideal-gas normal-shock limit
+  `(gamma + 1) / (gamma - 1)`
+- the sampled triplet must be thermodynamically consistent, with
+  `temperature_jump ~= pressure_jump / density_jump`
+
+Optional upstream-state floors can also be enabled through
+`ShockFinderConfig` to reject sampled cells whose upstream pressure,
+temperature, or density is too close to vacuum for a trustworthy jump ratio.
+
 ## Mach reconstruction
 
 Two Mach estimates are computed:

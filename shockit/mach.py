@@ -38,28 +38,31 @@ def mach_from_temperature_jump(
     temperature_jump: float,
     gamma: float,
     mach_max: float = 1000.0,
-    tol: float = 1e-12,
-    max_iter: int = 200,
 ) -> float:
-    """Invert a temperature jump to upstream Mach number via bisection."""
+    """Invert a temperature jump to upstream Mach number analytically."""
 
     if temperature_jump <= 1.0:
         return math.nan
 
-    low = 1.0
-    high = mach_max
-    low_value = temperature_jump_from_mach(low, gamma) - temperature_jump
-    high_value = temperature_jump_from_mach(high, gamma) - temperature_jump
-    if low_value > 0.0 or high_value < 0.0:
+    gamma_plus_one = gamma + 1.0
+    gamma_minus_one = gamma - 1.0
+    coefficient_a = 2.0 * gamma * gamma_minus_one
+    coefficient_b = (
+        -(gamma * gamma)
+        + (6.0 * gamma)
+        - 1.0
+        - (temperature_jump * gamma_plus_one * gamma_plus_one)
+    )
+    coefficient_c = -2.0 * gamma_minus_one
+    discriminant = (coefficient_b * coefficient_b) - (4.0 * coefficient_a * coefficient_c)
+    if discriminant < 0.0:
         return math.nan
 
-    for _ in range(max_iter):
-        mid = 0.5 * (low + high)
-        mid_value = temperature_jump_from_mach(mid, gamma) - temperature_jump
-        if abs(mid_value) < tol:
-            return mid
-        if mid_value > 0.0:
-            high = mid
-        else:
-            low = mid
-    return math.nan
+    mach_squared = (-coefficient_b + math.sqrt(discriminant)) / (2.0 * coefficient_a)
+    if mach_squared <= 1.0:
+        return math.nan
+
+    mach = math.sqrt(mach_squared)
+    if mach > mach_max:
+        return math.nan
+    return mach

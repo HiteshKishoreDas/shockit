@@ -30,6 +30,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--normal-field", choices=("temperature", "pressure"), default="temperature")
     parser.add_argument("--center-score", choices=("compression", "mach_pressure", "mach_temperature", "combined"), default="compression")
     parser.add_argument("--sampling-method", choices=("nearest_axis", "trilinear"), default="nearest_axis")
+    parser.add_argument("--chunk-size", type=int, default=128, help="Chunk edge length in cells; use 0 to disable chunking.")
+    parser.add_argument("--upstream-pressure-floor", type=float, default=None)
+    parser.add_argument("--upstream-temperature-floor", type=float, default=None)
+    parser.add_argument("--upstream-density-floor", type=float, default=None)
+    parser.add_argument("--quiet", action="store_true", help="Disable progress output.")
     parser.add_argument("--no-reduce-to-centers", action="store_true")
     parser.add_argument("--no-require-gradT-gradRho", action="store_true")
     parser.add_argument("--no-require-density-jump", action="store_true")
@@ -58,11 +63,19 @@ def main() -> None:
         normal_field=args.normal_field,
         center_score=args.center_score,
         sampling_method=args.sampling_method,
+        chunk_size=None if args.chunk_size == 0 else args.chunk_size,
+        upstream_pressure_floor=args.upstream_pressure_floor,
+        upstream_temperature_floor=args.upstream_temperature_floor,
+        upstream_density_floor=args.upstream_density_floor,
         reduce_to_centers=not args.no_reduce_to_centers,
         require_gradT_gradRho_alignment=not args.no_require_gradT_gradRho,
         require_density_jump=not args.no_require_density_jump,
     )
-    result = ShockFinder(config).find(cube)
+    progress = False if args.quiet else True
+    result = ShockFinder(config).find(cube, progress=progress)
+    if not args.quiet:
+        total_steps = 10 if config.reduce_to_centers else 9
+        print(f"[{total_steps}/{total_steps}] Writing output HDF5")
     save_result_hdf5(args.output, result)
 
 

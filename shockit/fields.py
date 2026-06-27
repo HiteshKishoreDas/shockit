@@ -27,11 +27,11 @@ class FluidCube:
         """Validate primitive fields and grid metadata for a uniform cube."""
 
         arrays = {
-            "rho": np.asarray(self.rho, dtype=float),
-            "pressure": np.asarray(self.pressure, dtype=float),
-            "vx": np.asarray(self.vx, dtype=float),
-            "vy": np.asarray(self.vy, dtype=float),
-            "vz": np.asarray(self.vz, dtype=float),
+            "rho": _as_float_array("rho", self.rho),
+            "pressure": _as_float_array("pressure", self.pressure),
+            "vx": _as_float_array("vx", self.vx),
+            "vy": _as_float_array("vy", self.vy),
+            "vz": _as_float_array("vz", self.vz),
         }
         shape = arrays["rho"].shape
         if len(shape) != 3:
@@ -54,3 +54,19 @@ class FluidCube:
             raise ValueError("dx, dy, dz must be strictly positive.")
         if self.gamma <= 1.0:
             raise ValueError("gamma must be greater than 1.")
+
+
+def _as_float_array(name: str, value: Any) -> np.ndarray:
+    """Convert one primitive field to a finite float array with useful errors."""
+
+    if isinstance(value, np.lib.npyio.NpzFile):
+        keys = ", ".join(sorted(value.files))
+        raise ValueError(
+            f"Field {name} received a NumPy .npz archive, not an array. "
+            f"Load one dataset from the archive first, for example np.load(...)[\"arr_0\"]. "
+            f"Available keys: {keys}."
+        )
+    try:
+        return np.asarray(value, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Field {name} could not be converted to a float array.") from exc

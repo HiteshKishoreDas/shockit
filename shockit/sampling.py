@@ -17,6 +17,10 @@ class SampledJumps:
     density_jump: np.ndarray
     pressure_up: np.ndarray
     pressure_down: np.ndarray
+    temperature_up: np.ndarray
+    temperature_down: np.ndarray
+    density_up: np.ndarray
+    density_down: np.ndarray
 
 
 def dominant_axis(nx: np.ndarray, ny: np.ndarray, nz: np.ndarray) -> np.ndarray:
@@ -111,6 +115,10 @@ def _sample_jumps_nearest_axis(
         density_jump=_safe_ratio(rho_down, rho_up),
         pressure_up=pressure_up,
         pressure_down=pressure_down,
+        temperature_up=temperature_up,
+        temperature_down=temperature_down,
+        density_up=rho_up,
+        density_down=rho_down,
     )
 
 
@@ -149,6 +157,10 @@ def _sample_jumps_trilinear(
             density_jump=empty.copy(),
             pressure_up=empty.copy(),
             pressure_down=empty.copy(),
+            temperature_up=empty.copy(),
+            temperature_down=empty.copy(),
+            density_up=empty.copy(),
+            density_down=empty.copy(),
         )
 
     base_x = active_indices[:, 0].astype(float)
@@ -196,4 +208,8 @@ def _sample_jumps_trilinear(
         density_jump=_safe_ratio(rho_down, rho_up),
         pressure_up=pressure_up,
         pressure_down=pressure_down,
+        temperature_up=temperature_up,
+        temperature_down=temperature_down,
+        density_up=rho_up,
+        density_down=rho_down,
     )

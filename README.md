@@ -56,6 +56,32 @@ shockit-find snapshot.h5 \
   --output shocks.h5
 ```
 
+## Chunked NPZ example
+
+```python
+from shockit import ShockFinderConfig, run_npz_shock_finder
+
+summary = run_npz_shock_finder(
+    "sim_data_2",
+    ShockFinderConfig(
+        reduce_to_centers=True,
+        min_mach=1.1,
+        sampling_method="nearest_axis",
+    ),
+)
+```
+
+`run_npz_shock_finder()` is the unified entry point for both plain and chunked
+`.npz` layouts. It auto-detects whether the directory contains:
+
+- plain `rho.npz` / `prs.npz` / `v1.npz` / `v2.npz` / `v3.npz`, or
+- a `chunked_npz/` tree of chunk directories.
+
+For chunked inputs, it reads neighboring chunk files to assemble haloed local
+cubes, runs the same shock physics on each local region, writes chunked shock
+outputs to `shock_chunked_npz/`, and, when requested, runs a separate second
+pass to reduce centers across chunk boundaries.
+
 ## How the finder works
 
 The implementation follows a Skillman-style workflow:
@@ -74,9 +100,13 @@ The implementation follows a Skillman-style workflow:
    - `nearest_axis` uses the dominant grid axis and periodic whole-cube array rolls
    - `trilinear` uses periodic trilinear interpolation on candidate cells only
 6. Require consistent pressure, temperature, and density jumps when enabled.
-7. Estimate Mach number from Rankine-Hugoniot jump relations.
-8. Keep cells that satisfy the zone criteria, jump criteria, and minimum Mach.
-9. Optionally reduce connected shock regions to representative center cells.
+7. Reject sampled jumps that violate the ideal-gas density-jump limit or that
+   fail `temperature_jump ~= pressure_jump / density_jump`.
+8. Optionally reject sampled cells whose upstream pressure, temperature, or
+   density falls below configured floors.
+9. Estimate Mach number from Rankine-Hugoniot jump relations.
+10. Keep cells that satisfy the zone criteria, jump criteria, and minimum Mach.
+11. Optionally reduce connected shock regions to representative center cells.
 
 Mask semantics:
 
@@ -105,8 +135,14 @@ upstream/downstream cells and may be biased low or high.
 - `ShockFinderConfig`: knobs for thresholds, jump requirements, center scoring,
   and sampling mode
 - `ShockFinder`: main finder class
+- `run_npz_shock_finder()`: one-call runner for both plain and chunked `.npz`
+  simulation directories
+- `run_chunked_npz_shock_finder()`: streamed shock finding on chunked `.npz`
+  cube directories with chunked outputs
 - `load_fluid_cube_from_hdf5()`: adapter for explicit paths, top-level aliases,
   and unique nested dataset basenames
+- `join_chunked_field()`, `join_all_fields()`: rebuild full arrays from chunked
+  `.npz` directories for plotting or inspection
 - `save_result_hdf5()`: save masks, jumps, Mach fields, normals, and summary
 
 ## Manual review
@@ -152,7 +188,7 @@ another directory with `--plot-dir`.
 - no AMR support
 - no SPH support
 - no yt frontend
-- no distributed or chunked processing
+- no distributed execution; local haloed chunk processing is available
 - shock broadening affects Mach estimates
 - false positives are still possible in compressive turbulent regions
 - contact rejection is helpful but not perfect
