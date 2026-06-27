@@ -14,11 +14,11 @@ def test_hdf5_adapter_loads_arrays(tmp_path) -> None:
     vz = np.ones((4, 4, 4)) * 5.0
 
     with h5py.File(filename, "w") as handle:
-        handle["density"] = rho
-        handle["press"] = pressure
-        handle["vel1"] = vx
-        handle["vel2"] = vy
-        handle["vel3"] = vz
+        handle.create_dataset("density", data=rho, chunks=(2, 2, 2))
+        handle.create_dataset("press", data=pressure, chunks=(2, 2, 2))
+        handle.create_dataset("vel1", data=vx, chunks=(2, 2, 2))
+        handle.create_dataset("vel2", data=vy, chunks=(2, 2, 2))
+        handle.create_dataset("vel3", data=vz, chunks=(2, 2, 2))
 
     cube = load_fluid_cube_from_hdf5(str(filename))
     np.testing.assert_allclose(cube.rho, rho)
@@ -28,6 +28,8 @@ def test_hdf5_adapter_loads_arrays(tmp_path) -> None:
     np.testing.assert_allclose(cube.vz, vz)
     assert cube.metadata["rho_field"] == "density"
     assert cube.metadata["pressure_field"] == "press"
+    assert cube.metadata["source_chunk_shape"] == (2, 2, 2)
+    assert cube.metadata["field_chunk_shapes"]["rho"] == (2, 2, 2)
 
 
 def test_hdf5_adapter_supports_nested_dataset_paths(tmp_path) -> None:
@@ -98,3 +100,19 @@ def test_hdf5_adapter_raises_on_ambiguous_basename_fallback(tmp_path) -> None:
 
     with pytest.raises(AmbiguousFieldError, match="(prim/rho.*cons/rho|cons/rho.*prim/rho)"):
         load_fluid_cube_from_hdf5(str(filename))
+
+
+def test_hdf5_adapter_omits_shared_chunk_shape_when_fields_do_not_match(tmp_path) -> None:
+    filename = tmp_path / "snapshot_mixed_chunks.h5"
+    array = np.ones((4, 4, 4))
+
+    with h5py.File(filename, "w") as handle:
+        handle.create_dataset("rho", data=array, chunks=(2, 2, 2))
+        handle.create_dataset("pressure", data=array, chunks=(4, 2, 2))
+        handle.create_dataset("vx", data=array, chunks=(2, 2, 2))
+        handle.create_dataset("vy", data=array, chunks=(2, 2, 2))
+        handle.create_dataset("vz", data=array, chunks=(2, 2, 2))
+
+    cube = load_fluid_cube_from_hdf5(str(filename))
+    assert cube.metadata["source_chunk_shape"] is None
+    assert cube.metadata["field_chunk_shapes"]["pressure"] == (4, 2, 2)

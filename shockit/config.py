@@ -27,7 +27,7 @@ class ShockFinderConfig:
     upstream_pressure_floor: Optional[float] = None
     upstream_temperature_floor: Optional[float] = None
     upstream_density_floor: Optional[float] = None
-    chunk_size: Optional[int] = 128
+    chunk_size: Optional[int] = None
 
     def __post_init__(self) -> None:
         """Validate supported configuration values."""

@@ -50,6 +50,13 @@ def test_cli_parser_smoke() -> None:
     assert args.upstream_pressure_floor == pytest.approx(1e-6)
 
 
+def test_cli_parser_defaults_to_auto_chunking() -> None:
+    from shockit.cli import build_parser
+
+    args = build_parser().parse_args(["snapshot.h5", "--output", "shocks.h5"])
+    assert args.chunk_size is None
+
+
 @pytest.mark.parametrize("center_score", ["compression", "mach_pressure", "mach_temperature", "combined"])
 def test_center_score_options_do_not_crash(center_score: str) -> None:
     cube = _tiny_cube()

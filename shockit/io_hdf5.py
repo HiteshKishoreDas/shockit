@@ -79,6 +79,17 @@ def load_fluid_cube_from_hdf5(
         vx_name = _resolve_field_name(handle, vx_field, ALIASES["vx"])
         vy_name = _resolve_field_name(handle, vy_field, ALIASES["vy"])
         vz_name = _resolve_field_name(handle, vz_field, ALIASES["vz"])
+        field_names = {
+            "rho": rho_name,
+            "pressure": pressure_name,
+            "vx": vx_name,
+            "vy": vy_name,
+            "vz": vz_name,
+        }
+        field_chunk_shapes = {
+            logical_name: _dataset_chunk_shape(handle[dataset_name])
+            for logical_name, dataset_name in field_names.items()
+        }
         return FluidCube(
             rho=np.asarray(handle[rho_name]),
             pressure=np.asarray(handle[pressure_name]),
@@ -96,5 +107,22 @@ def load_fluid_cube_from_hdf5(
                 "vx_field": vx_name,
                 "vy_field": vy_name,
                 "vz_field": vz_name,
+                "source_chunk_shape": _shared_chunk_shape(field_chunk_shapes),
+                "field_chunk_shapes": field_chunk_shapes,
             },
         )
+
+
+def _dataset_chunk_shape(dataset: h5py.Dataset) -> tuple[int, int, int] | None:
+    if dataset.chunks is None:
+        return None
+    return tuple(int(value) for value in dataset.chunks)
+
+
+def _shared_chunk_shape(
+    field_chunk_shapes: dict[str, tuple[int, int, int] | None]
+) -> tuple[int, int, int] | None:
+    chunk_shapes = {chunk_shape for chunk_shape in field_chunk_shapes.values() if chunk_shape is not None}
+    if len(chunk_shapes) != 1:
+        return None
+    return next(iter(chunk_shapes))

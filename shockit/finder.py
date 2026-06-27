@@ -8,7 +8,7 @@ from typing import Literal
 
 import numpy as np
 
-from .chunked import iter_balanced_slices
+from .chunked import ChunkShape, iter_balanced_slices
 from .config import ShockFinderConfig
 from .derived import (
     DerivedFields,
@@ -156,16 +156,19 @@ class ShockFinder:
         )
 
     def _run_chunked_pass(self, cube: FluidCube, report: ProgressCallback) -> _FinderPass:
-        chunk_size = self.config.chunk_size
-        if chunk_size is None:
-            raise ValueError("chunked pass requires chunk_size.")
+        chunk_shape = self._effective_chunk_shape(cube)
+        if chunk_shape is None:
+            raise ValueError("chunked pass requires chunk_size or source_chunk_shape metadata.")
 
         halo = max(1, self.config.shock_width_cells)
         shape = cube.rho.shape
-        chunk_slices = list(iter_balanced_slices(shape, chunk_size))
+        chunk_slices = list(iter_balanced_slices(shape, chunk_shape))
         total_chunks = len(chunk_slices)
         summary_step = 3 if self.config.reduce_to_centers else 2
-        report(f"[1/{summary_step}] Processing {total_chunks} haloed chunks of up to {chunk_size}^3 cells")
+        report(
+            f"[1/{summary_step}] Processing {total_chunks} haloed chunks of up to "
+            f"{_format_chunk_shape(chunk_shape)} cells"
+        )
 
         derived = DerivedFields(
             temperature=np.empty(shape, dtype=float),
@@ -232,8 +235,19 @@ class ShockFinder:
         )
 
     def _use_chunking(self, cube: FluidCube) -> bool:
-        chunk_size = self.config.chunk_size
-        return chunk_size is not None and any(axis_size > chunk_size for axis_size in cube.rho.shape)
+        chunk_shape = self._effective_chunk_shape(cube)
+        if chunk_shape is None:
+            return False
+        axis_chunk_sizes = _normalize_chunk_shape(chunk_shape)
+        return any(axis_size > axis_chunk_sizes[axis] for axis, axis_size in enumerate(cube.rho.shape))
+
+    def _effective_chunk_shape(self, cube: FluidCube) -> ChunkShape | None:
+        if self.config.chunk_size is not None:
+            return self.config.chunk_size
+        chunk_shape = cube.metadata.get("source_chunk_shape")
+        if chunk_shape is None:
+            return None
+        return tuple(int(value) for value in chunk_shape)
 
 
 def analyze_cube_pass(cube: FluidCube, config: ShockFinderConfig) -> _FinderPass:
@@ -302,3 +316,16 @@ def _extract_periodic_subcube(field: np.ndarray, core_slice: tuple[slice, slice,
 
 def _assign_chunk(target: np.ndarray, core_slice: tuple[slice, slice, slice], values: np.ndarray) -> None:
     target[core_slice] = values
+
+
+def _normalize_chunk_shape(chunk_shape: ChunkShape) -> tuple[int, int, int]:
+    if isinstance(chunk_shape, int):
+        return (chunk_shape, chunk_shape, chunk_shape)
+    return chunk_shape
+
+
+def _format_chunk_shape(chunk_shape: ChunkShape) -> str:
+    axis_chunk_sizes = _normalize_chunk_shape(chunk_shape)
+    if axis_chunk_sizes[0] == axis_chunk_sizes[1] == axis_chunk_sizes[2]:
+        return f"{axis_chunk_sizes[0]}^3"
+    return "x".join(str(value) for value in axis_chunk_sizes)

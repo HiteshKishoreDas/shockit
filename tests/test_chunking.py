@@ -70,6 +70,28 @@ def test_chunked_trilinear_matches_full_cube() -> None:
     _assert_same_result(chunked, unchunked)
 
 
+def test_chunked_hdf5_metadata_shape_matches_explicit_chunking() -> None:
+    cube = make_planar_shock_cube(mach=2.0, n=18)
+    cube.metadata["source_chunk_shape"] = (8, 8, 8)
+    auto_chunked = ShockFinder(
+        ShockFinderConfig(
+            chunk_size=None,
+            sampling_method="nearest_axis",
+            reduce_to_centers=False,
+            min_mach=1.1,
+        )
+    ).find(cube, progress=False)
+    explicit_chunked = ShockFinder(
+        ShockFinderConfig(
+            chunk_size=8,
+            sampling_method="nearest_axis",
+            reduce_to_centers=False,
+            min_mach=1.1,
+        )
+    ).find(cube, progress=False)
+    _assert_same_result(auto_chunked, explicit_chunked)
+
+
 def test_chunk_slices_are_balanced_near_target_size() -> None:
     slices = list(iter_balanced_slices((300, 260, 129), 128))
     axis_lengths = [{slc[axis].stop - slc[axis].start for slc in slices} for axis in range(3)]
@@ -77,3 +99,12 @@ def test_chunk_slices_are_balanced_near_target_size() -> None:
     assert axis_lengths[0] == {100}
     assert axis_lengths[1] == {86, 87}
     assert axis_lengths[2] == {64, 65}
+
+
+def test_chunk_slices_support_per_axis_chunk_shapes() -> None:
+    slices = list(iter_balanced_slices((18, 18, 18), (8, 6, 5)))
+    axis_lengths = [{slc[axis].stop - slc[axis].start for slc in slices} for axis in range(3)]
+
+    assert axis_lengths[0] == {6}
+    assert axis_lengths[1] == {6}
+    assert axis_lengths[2] == {4, 5}

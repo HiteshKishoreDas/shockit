@@ -119,6 +119,11 @@ Mask semantics:
 normal sampling is specifically needed. For large production snapshots, default
 to `nearest_axis` unless you need that oblique sampling behavior.
 
+When loading HDF5 snapshots through the CLI, compute-time chunking now defaults
+to the source dataset chunk shape when all primitive fields share one. Pass
+`--chunk-size N` to override that, or `--chunk-size 0` to force an unchunked
+full-cube pass.
+
 ## Mach estimates
 
 The package returns two Mach estimates:

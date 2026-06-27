@@ -20,6 +20,9 @@ class ChunkSpec:
     full_shape: tuple[int, int, int]
 
 
+ChunkShape = int | tuple[int, int, int]
+
+
 def balanced_axis_slices(axis_size: int, target_chunk_size: int) -> list[slice]:
     """Split one axis into nearly equal slices with size close to target."""
 
@@ -31,14 +34,21 @@ def balanced_axis_slices(axis_size: int, target_chunk_size: int) -> list[slice]:
     ]
 
 
-def iter_balanced_slices(shape: tuple[int, int, int], target_chunk_size: int):
+def iter_balanced_slices(shape: tuple[int, int, int], target_chunk_size: ChunkShape):
     """Yield balanced 3D chunk slices for a full cube shape."""
 
+    axis_chunk_sizes = _normalize_chunk_shape(target_chunk_size)
     axis_slices = [
-        balanced_axis_slices(axis_size, target_chunk_size) for axis_size in shape
+        balanced_axis_slices(axis_size, axis_chunk_sizes[axis]) for axis, axis_size in enumerate(shape)
     ]
     for x_slice, y_slice, z_slice in product(*axis_slices):
         yield x_slice, y_slice, z_slice
+
+
+def _normalize_chunk_shape(chunk_size: ChunkShape) -> tuple[int, int, int]:
+    if isinstance(chunk_size, int):
+        return (chunk_size, chunk_size, chunk_size)
+    return chunk_size
 
 
 def save_chunked_field(

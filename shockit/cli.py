@@ -30,7 +30,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--normal-field", choices=("temperature", "pressure"), default="temperature")
     parser.add_argument("--center-score", choices=("compression", "mach_pressure", "mach_temperature", "combined"), default="compression")
     parser.add_argument("--sampling-method", choices=("nearest_axis", "trilinear"), default="nearest_axis")
-    parser.add_argument("--chunk-size", type=int, default=128, help="Chunk edge length in cells; use 0 to disable chunking.")
+    parser.add_argument(
+        "--chunk-size",
+        type=int,
+        default=None,
+        help=(
+            "Chunk edge length in cells; defaults to the HDF5 dataset chunking when available. "
+            "Use 0 to disable chunking."
+        ),
+    )
     parser.add_argument("--upstream-pressure-floor", type=float, default=None)
     parser.add_argument("--upstream-temperature-floor", type=float, default=None)
     parser.add_argument("--upstream-density-floor", type=float, default=None)
