@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -24,10 +23,9 @@ class ShockFinderConfig:
     reduce_to_centers: bool = True
     center_score: str = "compression"
     sampling_method: str = "nearest_axis"
-    upstream_pressure_floor: Optional[float] = None
-    upstream_temperature_floor: Optional[float] = None
-    upstream_density_floor: Optional[float] = None
-    chunk_size: Optional[int] = None
+    upstream_pressure_floor: float | None = None
+    upstream_temperature_floor: float | None = None
+    upstream_density_floor: float | None = None
 
     def __post_init__(self) -> None:
         """Validate supported configuration values."""
@@ -53,5 +51,3 @@ class ShockFinderConfig:
         ):
             if value is not None and value < 0.0:
                 raise ValueError(f"{name} must be >= 0 when provided.")
-        if self.chunk_size is not None and self.chunk_size < 1:
-            raise ValueError("chunk_size must be >= 1 when provided.")

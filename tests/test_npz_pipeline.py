@@ -4,14 +4,9 @@ import json
 
 import numpy as np
 
-from shockit import (
-    ShockFinder,
-    ShockFinderConfig,
-    detect_npz_layout,
-    join_chunked_field,
-    run_npz_shock_finder,
-    save_chunked_field,
-)
+from shockit import ShockFinder, ShockFinderConfig
+from shockit.chunking import join_chunked_field, save_chunked_field
+from shockit.npz_pipeline import detect_npz_layout, run_npz_shock_finder
 from tests.helpers import make_planar_shock_cube
 
 
@@ -69,7 +64,7 @@ def test_run_npz_shock_finder_chunked_matches_direct_chunked_pipeline(tmp_path) 
     save_chunked_field("v2", cube.vy, chunk_root, target_chunk_size=5)
     save_chunked_field("v3", cube.vz, chunk_root, target_chunk_size=5)
 
-    config = ShockFinderConfig(reduce_to_centers=True, min_mach=1.1, chunk_size=None)
+    config = ShockFinderConfig(reduce_to_centers=True, min_mach=1.1)
     summary = run_npz_shock_finder(tmp_path, config, progress=False)
     result = ShockFinder(config).find(cube, progress=False)
 

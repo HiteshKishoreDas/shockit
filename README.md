@@ -5,7 +5,8 @@ A Python toolkit for shock detection and characterization in simulation data.
 `shockit` is a standalone Python package for offline shock finding on
 already-extracted uniform 3D NumPy cubes of primitive hydrodynamic variables.
 The core algorithm is independent of AthenaK, yt, AMR, and HDF5. HDF5 support
-is provided through a small adapter layer.
+is provided through a small adapter layer. Chunked processing is available
+through an explicit workflow layer in `shockit.chunking`.
 
 The package targets ideal-gas hydrodynamics on uniform Cartesian grids with
 periodic finite-difference operators in version 1.
@@ -18,10 +19,9 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-## Minimal array example
+## In-memory workflow
 
 ```python
-import numpy as np
 from shockit import FluidCube, ShockFinder, ShockFinderConfig
 
 cube = FluidCube(
@@ -42,6 +42,49 @@ result = ShockFinder(config).find(cube)
 shock_mask = result.shock_mask
 ```
 
+`ShockFinder.find()` never chunks automatically.
+
+## Chunked workflow
+
+```python
+from shockit import ShockFinderConfig
+from shockit.chunking import NpzChunkedInput, NpzChunkedOutput, run_chunked_shock_finder
+
+config = ShockFinderConfig(min_mach=1.1, reduce_to_centers=True)
+input_store = NpzChunkedInput("sim_data_2/chunked_npz")
+output_store = NpzChunkedOutput("sim_data_2/shock_chunked_npz", input_store.layout)
+
+summary = run_chunked_shock_finder(
+    input_store,
+    output_store,
+    config=config,
+    dx=1.0,
+    dy=1.0,
+    dz=1.0,
+    gamma=5.0 / 3.0,
+)
+```
+
+Workflow summary:
+
+```text
+In-memory workflow:
+    FluidCube -> ShockFinder.find() -> ShockFinderResult
+
+Chunked workflow:
+    chunked input store -> run_chunked_shock_finder() -> chunked output store + summary
+```
+
+The chunked workflow:
+
+- is chosen explicitly by providing a chunked input store rather than by any
+  `ShockFinderConfig` option
+- reads primitive fields with periodic halo cells
+- runs the same local shock physics as the in-memory finder
+- writes chunk-core outputs without reconstructing the full cube
+- performs global center reduction across chunk boundaries
+- treats `.npz` as the first chunk-store implementation, not a core algorithm assumption
+
 ## HDF5 CLI example
 
 ```bash
@@ -55,32 +98,6 @@ shockit-find snapshot.h5 \
   --min-mach 1.2 \
   --output shocks.h5
 ```
-
-## Chunked NPZ example
-
-```python
-from shockit import ShockFinderConfig, run_npz_shock_finder
-
-summary = run_npz_shock_finder(
-    "sim_data_2",
-    ShockFinderConfig(
-        reduce_to_centers=True,
-        min_mach=1.1,
-        sampling_method="nearest_axis",
-    ),
-)
-```
-
-`run_npz_shock_finder()` is the unified entry point for both plain and chunked
-`.npz` layouts. It auto-detects whether the directory contains:
-
-- plain `rho.npz` / `prs.npz` / `v1.npz` / `v2.npz` / `v3.npz`, or
-- a `chunked_npz/` tree of chunk directories.
-
-For chunked inputs, it reads neighboring chunk files to assemble haloed local
-cubes, runs the same shock physics on each local region, writes chunked shock
-outputs to `shock_chunked_npz/`, and, when requested, runs a separate second
-pass to reduce centers across chunk boundaries.
 
 ## How the finder works
 
@@ -116,13 +133,7 @@ Mask semantics:
 
 `nearest_axis` is simple and memory-predictable, but it is not candidate-only.
 `trilinear` samples candidate cells only and is useful when oblique-shock
-normal sampling is specifically needed. For large production snapshots, default
-to `nearest_axis` unless you need that oblique sampling behavior.
-
-When loading HDF5 snapshots through the CLI, compute-time chunking now defaults
-to the source dataset chunk shape when all primitive fields share one. Pass
-`--chunk-size N` to override that, or `--chunk-size 0` to force an unchunked
-full-cube pass.
+normal sampling is specifically needed.
 
 ## Mach estimates
 
@@ -140,15 +151,18 @@ upstream/downstream cells and may be biased low or high.
 - `ShockFinderConfig`: knobs for thresholds, jump requirements, center scoring,
   and sampling mode
 - `ShockFinder`: main finder class
-- `run_npz_shock_finder()`: one-call runner for both plain and chunked `.npz`
-  simulation directories
-- `run_chunked_npz_shock_finder()`: streamed shock finding on chunked `.npz`
-  cube directories with chunked outputs
 - `load_fluid_cube_from_hdf5()`: adapter for explicit paths, top-level aliases,
   and unique nested dataset basenames
-- `join_chunked_field()`, `join_all_fields()`: rebuild full arrays from chunked
-  `.npz` directories for plotting or inspection
 - `save_result_hdf5()`: save masks, jumps, Mach fields, normals, and summary
+
+Chunked API:
+
+- `shockit.chunking.run_chunked_shock_finder()`
+- `shockit.chunking.NpzChunkedInput`
+- `shockit.chunking.NpzChunkedOutput`
+- `shockit.chunking.save_chunked_field()`
+- `shockit.chunking.join_chunked_field()`
+- `shockit.chunking.join_all_fields()`
 
 ## Manual review
 
@@ -167,6 +181,7 @@ The included tests cover:
 - a Sod-like fixture
 - HDF5 field loading, including nested dataset paths
 - configuration and data validation
+- explicit chunked workflow equivalence and center reduction
 - repository hygiene checks for stale names and absolute links
 
 Run them with:
@@ -193,7 +208,7 @@ another directory with `--plot-dir`.
 - no AMR support
 - no SPH support
 - no yt frontend
-- no distributed execution; local haloed chunk processing is available
+- no multiprocessing or distributed execution
 - shock broadening affects Mach estimates
 - false positives are still possible in compressive turbulent regions
 - contact rejection is helpful but not perfect

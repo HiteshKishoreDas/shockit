@@ -48,8 +48,7 @@ the lower-pressure side as upstream.
 
 `nearest_axis` is simple and memory-predictable, but it is not candidate-only.
 `trilinear` is candidate-only and better matched to oblique normals, but it is
-more specialized. For large production snapshots, default to `nearest_axis`
-unless oblique-shock normal sampling is specifically needed.
+more specialized.
 
 ## Jump filtering
 
@@ -95,6 +94,14 @@ outside candidate regions they may be `NaN`.
 
 When `reduce_to_centers=True`, `shock_mask` is intended for cataloging rather
 than geometric thickness.
+
+## Chunking note
+
+Chunking is a workflow implementation detail, not a separate physics
+algorithm. The explicit chunked runner reads haloed primitive fields, applies
+the same local `analyze_cube_pass()` physics as the in-memory finder, and then
+reduces centers globally across chunk boundaries. Equivalent chunked and
+non-chunked inputs should agree within normal floating-point tolerance.
 
 ## Limitations
 

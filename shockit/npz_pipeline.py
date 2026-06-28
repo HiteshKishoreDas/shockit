@@ -1,4 +1,4 @@
-"""Unified .npz shock-finder pipeline."""
+"""Legacy `.npz` pipeline helpers."""
 
 from __future__ import annotations
 
@@ -8,8 +8,7 @@ from typing import Any
 
 import numpy as np
 
-from .chunked import join_chunked_field
-from .chunked_finder import run_chunked_npz_shock_finder
+from .chunking import NpzChunkedInput, NpzChunkedOutput, join_chunked_field, run_chunked_shock_finder
 from .config import ShockFinderConfig
 from .fields import FluidCube
 from .finder import ShockFinder
@@ -49,15 +48,16 @@ def run_npz_shock_finder(
     gamma: float = 5.0 / 3.0,
     progress: bool = True,
 ) -> dict[str, Any]:
-    """Run the shock finder on either plain or chunked .npz inputs."""
+    """Run the shock finder on either plain or chunked `.npz` inputs."""
 
     layout = detect_npz_layout(root)
     if layout.kind == "chunked":
-        output_root = layout.input_path.parent / "shock_chunked_npz"
-        return run_chunked_npz_shock_finder(
-            layout.input_path,
-            output_root,
-            config,
+        input_store = NpzChunkedInput(layout.input_path)
+        output_store = NpzChunkedOutput(layout.input_path.parent / "shock_chunked_npz", input_store.layout)
+        return run_chunked_shock_finder(
+            input_store,
+            output_store,
+            config=config,
             dx=dx,
             dy=dy,
             dz=dz,

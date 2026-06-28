@@ -12,7 +12,6 @@ from shockit import FluidCube, ShockFinderConfig
         ({"min_mach": 0.9}, "min_mach"),
         ({"grad_T_min": -1.0}, "grad_T_min"),
         ({"shock_width_cells": 0}, "shock_width_cells"),
-        ({"chunk_size": 0}, "chunk_size"),
         ({"center_score": "bad"}, "center_score"),
         ({"sampling_method": "bad"}, "sampling_method"),
         ({"upstream_pressure_floor": -1.0}, "upstream_pressure_floor"),

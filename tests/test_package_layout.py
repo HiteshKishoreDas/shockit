@@ -20,6 +20,20 @@ def test_package_import_smoke() -> None:
     assert FluidCube is module.FluidCube
     assert ShockFinder is module.ShockFinder
     assert ShockFinderConfig is module.ShockFinderConfig
+    assert not hasattr(module, "run_chunked_npz_shock_finder")
+    assert not hasattr(module, "run_npz_shock_finder")
+
+
+def test_chunking_package_exports_explicit_workflow_surface() -> None:
+    module = importlib.import_module("shockit.chunking")
+    assert hasattr(module, "NpzChunkedInput")
+    assert hasattr(module, "NpzChunkedOutput")
+    assert hasattr(module, "run_chunked_shock_finder")
+    assert hasattr(module, "save_chunked_field")
+    assert hasattr(module, "join_chunked_field")
+    assert hasattr(module, "join_all_fields")
+    assert not hasattr(module, "required_halo")
+    assert not hasattr(module, "iter_balanced_slices")
 
 
 def test_cli_parser_smoke() -> None:
@@ -31,8 +45,6 @@ def test_cli_parser_smoke() -> None:
             "--output",
             "shocks.h5",
             "--quiet",
-            "--chunk-size",
-            "64",
             "--center-score",
             "combined",
             "--sampling-method",
@@ -44,17 +56,17 @@ def test_cli_parser_smoke() -> None:
     assert args.input == "snapshot.h5"
     assert args.output == "shocks.h5"
     assert args.quiet is True
-    assert args.chunk_size == 64
+    assert not hasattr(args, "chunk_size")
     assert args.center_score == "combined"
     assert args.sampling_method == "nearest_axis"
     assert args.upstream_pressure_floor == pytest.approx(1e-6)
 
 
-def test_cli_parser_defaults_to_auto_chunking() -> None:
+def test_cli_parser_rejects_removed_chunk_option() -> None:
     from shockit.cli import build_parser
 
-    args = build_parser().parse_args(["snapshot.h5", "--output", "shocks.h5"])
-    assert args.chunk_size is None
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["snapshot.h5", "--output", "shocks.h5", "--chunk-size", "64"])
 
 
 @pytest.mark.parametrize("center_score", ["compression", "mach_pressure", "mach_temperature", "combined"])
