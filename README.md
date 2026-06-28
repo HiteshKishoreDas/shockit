@@ -3,10 +3,11 @@
 A Python toolkit for shock detection and characterization in simulation data.
 
 `shockit` is a standalone Python package for offline shock finding on
-already-extracted uniform 3D NumPy cubes of primitive hydrodynamic variables.
-The core algorithm is independent of AthenaK, yt, AMR, and HDF5. HDF5 support
-is provided through a small adapter layer. Chunked processing is available
-through an explicit workflow layer in `shockit.chunking`.
+already-extracted uniform 3D primitive hydrodynamic fields. The same public
+`FluidCube` and `ShockFinder` API works for both in-memory NumPy arrays and
+chunked `.npz` field directories. The core algorithm is independent of
+AthenaK, yt, AMR, and HDF5. HDF5 support is provided through a small adapter
+layer, and the chunked workflow remains modular under `shockit.chunking`.
 
 The package targets ideal-gas hydrodynamics on uniform Cartesian grids with
 periodic finite-difference operators in version 1.
@@ -19,7 +20,7 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-## In-memory workflow
+## Unified workflow
 
 ```python
 from shockit import FluidCube, ShockFinder, ShockFinderConfig
@@ -42,27 +43,24 @@ result = ShockFinder(config).find(cube)
 shock_mask = result.shock_mask
 ```
 
-`ShockFinder.find()` never chunks automatically.
-
-## Chunked workflow
+## Chunked workflow with the same API
 
 ```python
-from shockit import ShockFinderConfig
-from shockit.chunking import NpzChunkedInput, NpzChunkedOutput, run_chunked_shock_finder
+from shockit import FluidCube, ShockFinder, ShockFinderConfig
 
 config = ShockFinderConfig(min_mach=1.1, reduce_to_centers=True)
-input_store = NpzChunkedInput("sim_data_2/chunked_npz")
-output_store = NpzChunkedOutput("sim_data_2/shock_chunked_npz", input_store.layout)
-
-summary = run_chunked_shock_finder(
-    input_store,
-    output_store,
-    config=config,
+cube = FluidCube(
+    rho="chunked_snapshot/rho",
+    pressure="chunked_snapshot/prs",
+    vx="chunked_snapshot/v1",
+    vy="chunked_snapshot/v2",
+    vz="chunked_snapshot/v3",
     dx=1.0,
     dy=1.0,
     dz=1.0,
     gamma=5.0 / 3.0,
 )
+result = ShockFinder(config).find(cube, output="shock_output")
 ```
 
 Workflow summary:
@@ -72,18 +70,29 @@ In-memory workflow:
     FluidCube -> ShockFinder.find() -> ShockFinderResult
 
 Chunked workflow:
-    chunked input store -> run_chunked_shock_finder() -> chunked output store + summary
+    FluidCube(path fields) -> ShockFinder.find(..., output=...) -> ChunkedShockFinderResult
 ```
+
+The same `FluidCube` and `ShockFinder` API is used in both cases.
+Array fields produce an in-memory result.
+Path fields produce a chunked on-disk result.
+Chunking is inferred from field storage, not from array size.
 
 The chunked workflow:
 
-- is chosen explicitly by providing a chunked input store rather than by any
-  `ShockFinderConfig` option
+- is chosen by passing chunked field paths into `FluidCube`, not by any
+  `ShockFinderConfig` option and not by array size
 - reads primitive fields with periodic halo cells
 - runs the same local shock physics as the in-memory finder
 - writes chunk-core outputs without reconstructing the full cube
 - performs global center reduction across chunk boundaries
 - treats `.npz` as the first chunk-store implementation, not a core algorithm assumption
+
+Advanced/manual chunked workflows are still available through:
+
+- `shockit.chunking.NpzChunkedInput`
+- `shockit.chunking.NpzChunkedOutput`
+- `shockit.chunking.run_chunked_shock_finder()`
 
 ## HDF5 CLI example
 
@@ -167,6 +176,7 @@ Chunked API:
 ## Manual review
 
 - [docs/review_map.md](docs/review_map.md): file-by-file map for manual review
+- [docs/test_suite.md](docs/test_suite.md): test-by-test map and test-running notes
 
 ## Test suite
 
@@ -181,23 +191,26 @@ The included tests cover:
 - a Sod-like fixture
 - HDF5 field loading, including nested dataset paths
 - configuration and data validation
-- explicit chunked workflow equivalence and center reduction
+- unified in-memory/chunked API equivalence and chunk-aware center reduction
 - repository hygiene checks for stale names and absolute links
 
 Run them with:
 
 ```bash
-python -m pytest
+./.venv/bin/python -m pytest -q
 ```
 
 To save viewable plot artifacts from the plotting-aware tests:
 
 ```bash
-python -m pytest --plot-tests
+./.venv/bin/python -m pytest --plot-tests
 ```
 
 PNG files are written under `test_artifacts/plots/` by default. You can choose
 another directory with `--plot-dir`.
+
+For a module-by-module description of the suite, including the opt-in chunked
+stress test, see [docs/test_suite.md](docs/test_suite.md).
 
 ## Limitations
 

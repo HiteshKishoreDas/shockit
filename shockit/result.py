@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+from .fields import ChunkedFieldReference
 
 
 @dataclass
@@ -34,3 +37,26 @@ class ShockFinderResult:
     normal_z: np.ndarray
     summary: dict[str, Any]
     full_shock_mask: np.ndarray | None = None
+
+
+@dataclass
+class ChunkedShockFinderResult:
+    """Chunked on-disk result with field handles parallel to `ShockFinderResult`."""
+
+    output_root: Path
+    shock_mask: ChunkedFieldReference
+    shock_zone_mask: ChunkedFieldReference
+    mach_temperature: ChunkedFieldReference
+    mach_pressure: ChunkedFieldReference
+    compression: ChunkedFieldReference
+    div_v: ChunkedFieldReference
+    temperature: ChunkedFieldReference
+    entropy: ChunkedFieldReference
+    temperature_jump: ChunkedFieldReference
+    pressure_jump: ChunkedFieldReference
+    density_jump: ChunkedFieldReference
+    normal_x: ChunkedFieldReference
+    normal_y: ChunkedFieldReference
+    normal_z: ChunkedFieldReference
+    summary: dict[str, Any]
+    full_shock_mask: ChunkedFieldReference | None = None

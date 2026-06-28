@@ -2,7 +2,6 @@
 
 from .layout import save_chunked_field
 from .reader import NpzChunkedInput
-from .runner import run_chunked_shock_finder
 from .writer import NpzChunkedOutput, join_all_fields, join_chunked_field
 
 __all__ = [
@@ -13,3 +12,11 @@ __all__ = [
     "run_chunked_shock_finder",
     "save_chunked_field",
 ]
+
+
+def __getattr__(name: str):
+    if name == "run_chunked_shock_finder":
+        from .runner import run_chunked_shock_finder
+
+        return run_chunked_shock_finder
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

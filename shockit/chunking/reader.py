@@ -4,12 +4,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from itertools import product
+import os
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 import numpy as np
 
 from .layout import ChunkLayout, ChunkSpec, load_chunk_layout
+
+if TYPE_CHECKING:
+    from ..fields import FluidCube
 
 DEFAULT_FIELD_MAPPING = {
     "rho": "rho",
@@ -101,14 +105,35 @@ class NpzChunkedInput:
 
     def __init__(
         self,
-        root: str | Path,
+        root: str | Path | None = None,
         field_mapping: dict[str, str] | None = None,
+        *,
+        field_paths: dict[str, str | Path] | None = None,
     ) -> None:
-        self.root = Path(root)
+        if (root is None) == (field_paths is None):
+            raise ValueError("Provide either root=... or field_paths=..., but not both.")
+        self.root = Path(root) if root is not None else _common_root(field_paths or {})
         self.field_mapping = dict(DEFAULT_FIELD_MAPPING if field_mapping is None else field_mapping)
+        self.field_paths = _resolve_field_paths(self.root, self.field_mapping, field_paths)
         self._layout: ChunkLayout | None = None
         self._readers: dict[str, NpzFieldReader] = {}
         self._build_readers()
+
+    @classmethod
+    def from_fluid_cube(cls, cube: FluidCube) -> NpzChunkedInput:
+        """Build a chunked input store from a chunked `FluidCube`."""
+
+        if not cube.is_chunked:
+            raise ValueError("NpzChunkedInput.from_fluid_cube() requires a chunked FluidCube.")
+        return cls(
+            field_paths={
+                "rho": cube.rho.path,
+                "pressure": cube.pressure.path,
+                "vx": cube.vx.path,
+                "vy": cube.vy.path,
+                "vz": cube.vz.path,
+            }
+        )
 
     @property
     def shape(self) -> tuple[int, int, int]:
@@ -124,8 +149,7 @@ class NpzChunkedInput:
 
     def _build_readers(self) -> None:
         base_signature: tuple[tuple[int, int, int], tuple[tuple[tuple[int, int, int], tuple[int, int, int]], ...]] | None = None
-        for logical_name, directory_name in self.field_mapping.items():
-            field_dir = self.root / directory_name
+        for logical_name, field_dir in self.field_paths.items():
             layout = load_chunk_layout(field_dir)
             signature = _layout_signature(layout)
             if base_signature is None:
@@ -136,6 +160,24 @@ class NpzChunkedInput:
             with np.load(layout.specs[0].path) as first_chunk:
                 dtype = first_chunk["values"].dtype
             self._readers[logical_name] = NpzFieldReader(field_dir=field_dir, layout=layout, dtype=dtype)
+
+
+def _resolve_field_paths(
+    root: Path,
+    field_mapping: dict[str, str],
+    explicit_field_paths: dict[str, str | Path] | None,
+) -> dict[str, Path]:
+    if explicit_field_paths is not None:
+        return {name: Path(path) for name, path in explicit_field_paths.items()}
+    return {
+        logical_name: root / directory_name
+        for logical_name, directory_name in field_mapping.items()
+    }
+
+
+def _common_root(field_paths: dict[str, str | Path]) -> Path:
+    resolved = [str(Path(path)) for path in field_paths.values()]
+    return Path(os.path.commonpath(resolved)) if resolved else Path(".")
 
 
 def _layout_signature(

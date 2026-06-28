@@ -39,3 +39,6 @@ include = ["shockit*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+  "stress: opt-in stress test for large chunked inputs",
+]

@@ -31,7 +31,7 @@ def make_summary(
 ) -> dict[str, Any]:
     """Summarize both unreduced and final mask populations."""
 
-    total_cells = int(np.prod(cube.rho.shape))
+    total_cells = int(np.prod(cube.shape))
     shock_cells = int(np.count_nonzero(shock_mask))
     full_shock_cells = int(np.count_nonzero(full_shock_mask))
     _, n_connected_components = ndimage.label(full_shock_mask)
@@ -40,7 +40,7 @@ def make_summary(
     fpmin, fpmed, fpmax = finite_stats(mach_fields.mach_pressure[full_shock_mask])
     ftmin, ftmed, ftmax = finite_stats(mach_fields.mach_temperature[full_shock_mask])
     return {
-        "grid_shape": cube.rho.shape,
+        "grid_shape": cube.shape,
         "total_cells": total_cells,
         "shock_zone_cells": int(np.count_nonzero(shock_zone_mask)),
         "shock_cells": shock_cells,

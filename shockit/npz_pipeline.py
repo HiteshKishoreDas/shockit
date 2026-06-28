@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 
-from .chunking import NpzChunkedInput, NpzChunkedOutput, join_chunked_field, run_chunked_shock_finder
+from .chunking import join_chunked_field
 from .config import ShockFinderConfig
 from .fields import FluidCube
 from .finder import ShockFinder
@@ -52,18 +52,23 @@ def run_npz_shock_finder(
 
     layout = detect_npz_layout(root)
     if layout.kind == "chunked":
-        input_store = NpzChunkedInput(layout.input_path)
-        output_store = NpzChunkedOutput(layout.input_path.parent / "shock_chunked_npz", input_store.layout)
-        return run_chunked_shock_finder(
-            input_store,
-            output_store,
-            config=config,
+        cube = FluidCube(
+            rho=layout.input_path / "rho",
+            pressure=layout.input_path / "prs",
+            vx=layout.input_path / "v1",
+            vy=layout.input_path / "v2",
+            vz=layout.input_path / "v3",
             dx=dx,
             dy=dy,
             dz=dz,
             gamma=gamma,
+        )
+        result = ShockFinder(config).find(
+            cube,
+            output=layout.input_path.parent / "shock_chunked_npz",
             progress=progress,
         )
+        return result.summary
 
     cube = _load_plain_cube(
         layout.input_path,
