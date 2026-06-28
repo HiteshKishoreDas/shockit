@@ -3,6 +3,7 @@ import importlib
 import pytest
 
 from shockit import FluidCube, ShockFinder, ShockFinderConfig
+from shockit.result import ChunkedShockFinderResult, ShockFinderResult
 
 
 def _tiny_cube() -> FluidCube:
@@ -20,6 +21,8 @@ def test_package_import_smoke() -> None:
     assert FluidCube is module.FluidCube
     assert ShockFinder is module.ShockFinder
     assert ShockFinderConfig is module.ShockFinderConfig
+    assert ShockFinderResult is importlib.import_module("shockit.result").ShockFinderResult
+    assert ChunkedShockFinderResult is importlib.import_module("shockit.result").ChunkedShockFinderResult
     assert not hasattr(module, "run_chunked_npz_shock_finder")
     assert not hasattr(module, "run_npz_shock_finder")
 

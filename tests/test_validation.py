@@ -4,6 +4,8 @@ import numpy as np
 import pytest
 
 from shockit import FluidCube, ShockFinderConfig
+from shockit.chunking import save_chunked_field
+from shockit.fields import ChunkedFieldReference
 
 
 @pytest.mark.parametrize(
@@ -66,3 +68,100 @@ def test_fluid_cube_reports_field_name_for_bad_array_conversion() -> None:
 
     with pytest.raises(ValueError, match="Field rho could not be converted"):
         FluidCube(rho={"bad": "input"}, pressure=pressure, vx=velocity, vy=velocity, vz=velocity)
+
+
+def test_fluid_cube_detects_in_memory_mode() -> None:
+    cube = FluidCube(
+        rho=np.ones((2, 2, 2)),
+        pressure=np.ones((2, 2, 2)),
+        vx=np.zeros((2, 2, 2)),
+        vy=np.zeros((2, 2, 2)),
+        vz=np.zeros((2, 2, 2)),
+    )
+
+    assert cube.is_in_memory
+    assert not cube.is_chunked
+    assert cube.storage_mode == "in_memory"
+
+
+def test_fluid_cube_detects_chunked_mode(tmp_path) -> None:
+    root = tmp_path / "chunked"
+    values = np.ones((4, 4, 4))
+    zeros = np.zeros((4, 4, 4))
+    save_chunked_field("rho", values, root, target_chunk_size=2)
+    save_chunked_field("prs", values, root, target_chunk_size=2)
+    save_chunked_field("v1", zeros, root, target_chunk_size=2)
+    save_chunked_field("v2", zeros, root, target_chunk_size=2)
+    save_chunked_field("v3", zeros, root, target_chunk_size=2)
+
+    cube = FluidCube(
+        rho=root / "rho",
+        pressure=root / "prs",
+        vx=root / "v1",
+        vy=root / "v2",
+        vz=root / "v3",
+    )
+
+    assert cube.is_chunked
+    assert not cube.is_in_memory
+    assert cube.storage_mode == "chunked"
+    assert isinstance(cube.rho, ChunkedFieldReference)
+    assert cube.shape == (4, 4, 4)
+
+
+def test_fluid_cube_rejects_mixed_array_and_path_fields(tmp_path) -> None:
+    root = tmp_path / "chunked"
+    values = np.ones((4, 4, 4))
+    zeros = np.zeros((4, 4, 4))
+    save_chunked_field("prs", values, root, target_chunk_size=2)
+    save_chunked_field("v1", zeros, root, target_chunk_size=2)
+    save_chunked_field("v2", zeros, root, target_chunk_size=2)
+    save_chunked_field("v3", zeros, root, target_chunk_size=2)
+
+    with pytest.raises(ValueError, match="either all in-memory arrays or all chunked field paths"):
+        FluidCube(
+            rho=np.ones((4, 4, 4)),
+            pressure=root / "prs",
+            vx=root / "v1",
+            vy=root / "v2",
+            vz=root / "v3",
+        )
+
+
+def test_fluid_cube_chunked_validation_rejects_missing_directory(tmp_path) -> None:
+    root = tmp_path / "chunked"
+    values = np.ones((4, 4, 4))
+    zeros = np.zeros((4, 4, 4))
+    save_chunked_field("rho", values, root, target_chunk_size=2)
+    save_chunked_field("prs", values, root, target_chunk_size=2)
+    save_chunked_field("v1", zeros, root, target_chunk_size=2)
+    save_chunked_field("v2", zeros, root, target_chunk_size=2)
+
+    with pytest.raises(FileNotFoundError, match="Chunked field directory"):
+        FluidCube(
+            rho=root / "rho",
+            pressure=root / "prs",
+            vx=root / "v1",
+            vy=root / "v2",
+            vz=root / "v3",
+        )
+
+
+def test_fluid_cube_chunked_validation_rejects_incompatible_layouts(tmp_path) -> None:
+    root = tmp_path / "chunked"
+    values = np.ones((4, 4, 4))
+    zeros = np.zeros((4, 4, 4))
+    save_chunked_field("rho", values, root, target_chunk_size=2)
+    save_chunked_field("prs", np.ones((6, 4, 4)), root, target_chunk_size=2)
+    save_chunked_field("v1", zeros, root, target_chunk_size=2)
+    save_chunked_field("v2", zeros, root, target_chunk_size=2)
+    save_chunked_field("v3", zeros, root, target_chunk_size=2)
+
+    with pytest.raises(ValueError, match="layout incompatible"):
+        FluidCube(
+            rho=root / "rho",
+            pressure=root / "prs",
+            vx=root / "v1",
+            vy=root / "v2",
+            vz=root / "v3",
+        )

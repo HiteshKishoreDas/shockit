@@ -7,6 +7,15 @@ def test_review_map_exists() -> None:
     assert Path("docs/review_map.md").is_file()
 
 
+def test_test_suite_doc_exists() -> None:
+    assert Path("docs/test_suite.md").is_file()
+
+
 def test_readme_links_to_review_map() -> None:
     readme = Path("README.md").read_text()
     assert "[docs/review_map.md](docs/review_map.md)" in readme
+
+
+def test_readme_links_to_test_suite_doc() -> None:
+    readme = Path("README.md").read_text()
+    assert "[docs/test_suite.md](docs/test_suite.md)" in readme
