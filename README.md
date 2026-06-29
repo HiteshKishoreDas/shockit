@@ -236,6 +236,10 @@ stress-test environment variables, see [docs/testing.md](docs/testing.md).
 
 ## Examples
 
+- plotting examples require `pip install -e ".[plots]"`
 - [examples/run_from_arrays.py](examples/run_from_arrays.py)
 - [examples/run_from_hdf5.py](examples/run_from_hdf5.py)
 - [examples/make_synthetic_planar_shock.py](examples/make_synthetic_planar_shock.py)
+- [examples/save_chunked_npz_from_arrays.py](examples/save_chunked_npz_from_arrays.py)
+- [examples/run_from_npz.py](examples/run_from_npz.py)
+- [examples/plot_npz_results.py](examples/plot_npz_results.py)
