@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 
-from .fields import ChunkedFieldReference
+from .storage import ChunkedFieldReference
 
 
 @dataclass

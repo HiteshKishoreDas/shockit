@@ -144,6 +144,9 @@ def load_chunk_layout(field_dir: str | Path) -> ChunkLayout:
     full_shapes = {full_shape for _, _, _, full_shape in raw_specs}
     if len(full_shapes) != 1:
         raise ValueError(f"Inconsistent full shapes in {field_path}.")
+    full_shape = next(iter(full_shapes))
+    for chunk_path, start, stop, _ in raw_specs:
+        _validate_chunk_extent(chunk_path, start, stop, full_shape)
 
     axis_bounds = tuple(
         tuple(
@@ -155,6 +158,8 @@ def load_chunk_layout(field_dir: str | Path) -> ChunkLayout:
         )
         for axis in range(3)
     )
+    for axis, axis_slices in enumerate(axis_bounds):
+        _validate_axis_slices(axis_slices, full_shape[axis], field_path=field_path, axis=axis)
     axis_lookup = [
         {(axis_slice.start, axis_slice.stop): index for index, axis_slice in enumerate(axis_slices)}
         for axis_slices in axis_bounds
@@ -171,13 +176,68 @@ def load_chunk_layout(field_dir: str | Path) -> ChunkLayout:
     ]
     specs.sort(key=lambda spec: spec.grid_index)
 
+    if len({spec.grid_index for spec in specs}) != len(specs):
+        raise ValueError(f"Chunk coverage in {field_path} has duplicate grid indices.")
     expected_chunk_count = math.prod(len(axis_slices) for axis_slices in axis_bounds)
     if len(specs) != expected_chunk_count:
         raise ValueError(f"Chunk coverage in {field_path} does not form a complete regular grid.")
-    if len({spec.grid_index for spec in specs}) != len(specs):
-        raise ValueError(f"Chunk coverage in {field_path} has duplicate grid indices.")
 
     return ChunkLayout(specs=tuple(specs), axis_slices=axis_bounds)
+
+
+def _validate_chunk_extent(
+    chunk_path: Path,
+    start: tuple[int, int, int],
+    stop: tuple[int, int, int],
+    full_shape: tuple[int, int, int],
+) -> None:
+    for axis in range(3):
+        if stop[axis] <= start[axis]:
+            raise ValueError(
+                f"Invalid chunk extent in {chunk_path}: axis {axis} has start={start[axis]} stop={stop[axis]}."
+            )
+        if start[axis] < 0 or stop[axis] > full_shape[axis]:
+            raise ValueError(
+                f"Invalid chunk extent in {chunk_path}: axis {axis} must stay within [0, {full_shape[axis]}]."
+            )
+
+
+def _validate_axis_slices(
+    axis_slices: tuple[slice, ...],
+    axis_size: int,
+    *,
+    field_path: Path,
+    axis: int,
+) -> None:
+    if not axis_slices:
+        raise ValueError(f"Chunk coverage in {field_path} does not form a complete regular grid.")
+    for axis_slice in axis_slices:
+        if axis_slice.stop <= axis_slice.start:
+            raise ValueError(
+                f"Chunk coverage in {field_path} has invalid chunk extent on axis {axis}: "
+                f"{axis_slice.start}:{axis_slice.stop}."
+            )
+    if axis_slices[0].start != 0:
+        raise ValueError(
+            f"Chunk coverage in {field_path} has a gap before the first chunk on axis {axis}: "
+            f"starts at {axis_slices[0].start} instead of 0."
+        )
+    if axis_slices[-1].stop != axis_size:
+        raise ValueError(
+            f"Chunk coverage in {field_path} does not reach the full domain on axis {axis}: "
+            f"ends at {axis_slices[-1].stop} instead of {axis_size}."
+        )
+    for previous, current in zip(axis_slices, axis_slices[1:], strict=False):
+        if previous.stop < current.start:
+            raise ValueError(
+                f"Chunk coverage in {field_path} has a gap on axis {axis}: "
+                f"{previous.stop} -> {current.start}."
+            )
+        if previous.stop > current.start:
+            raise ValueError(
+                f"Chunk coverage in {field_path} has an overlap on axis {axis}: "
+                f"{previous.stop} overlaps {current.start}."
+            )
 
 
 def _chunk_filename(chunk_index: int, chunk_slice: tuple[slice, slice, slice]) -> str:

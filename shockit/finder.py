@@ -19,10 +19,11 @@ from .derived import (
     compute_mach_fields,
     compute_normals,
 )
-from .fields import ChunkedFieldReference, FluidCube
+from .fields import FluidCube
 from .masks import build_final_shock_mask, build_shock_zone_mask, reduce_to_centers
 from .result import ChunkedShockFinderResult, ShockFinderResult
 from .sampling import SampledJumps, sample_jumps
+from .storage import ChunkedFieldReference
 from .summary import make_summary
 
 ProgressCallback = Callable[[str], None]
@@ -53,27 +54,25 @@ class ShockFinder:
     ) -> ShockFinderResult | ChunkedShockFinderResult:
         """Run the shock finder on either in-memory or chunked primitive fields."""
 
-        progress_callback: ProgressCallback | None
-        if progress is True or progress is None:
-            progress_callback = print
-        elif progress is False:
-            progress_callback = None
-        else:
-            progress_callback = progress
+        if not isinstance(cube, FluidCube):
+            raise TypeError("ShockFinder.find() expects a FluidCube instance.")
 
-        def report(message: str) -> None:
-            if progress_callback is not None:
-                progress_callback(message)
+        report = _build_reporter(progress)
 
         if cube.is_chunked:
-            return self._find_chunked(cube, output=output, progress=progress)
+            return self._find_chunked(cube, output=output, progress=progress, report=report)
+        if output is not None:
+            raise ValueError(
+                "output= is only used for chunked FluidCube inputs; "
+                "use save_result_hdf5() for in-memory results."
+            )
         return self._find_in_memory(cube, report=report)
 
     def _find_in_memory(
         self,
         cube: FluidCube,
         *,
-        report: ProgressCallback | None,
+        report: ProgressCallback,
     ) -> ShockFinderResult:
         cube_pass = analyze_cube_pass(cube, self.config, report=report)
 
@@ -123,6 +122,7 @@ class ShockFinder:
         *,
         output: str | Path | None,
         progress: ProgressReporter,
+        report: ProgressCallback,
     ) -> ChunkedShockFinderResult:
         if output is None:
             raise ValueError(
@@ -134,6 +134,8 @@ class ShockFinder:
         input_store = NpzChunkedInput.from_fluid_cube(cube)
         output_root = Path(output)
         output_store = NpzChunkedOutput(output_root, input_store.layout)
+        if self.config.reduce_to_centers:
+            report("[chunked] Skipping center reduction; chunked outputs stay unreduced to avoid memory blowups")
         summary = run_chunked_shock_finder(
             input_store,
             output_store,
@@ -144,45 +146,7 @@ class ShockFinder:
             gamma=cube.gamma,
             progress=progress,
         )
-        field_refs = {
-            field_name: ChunkedFieldReference(path=output_root / field_name, layout=input_store.layout)
-            for field_name in (
-                "shock_mask",
-                "shock_zone_mask",
-                "full_shock_mask",
-                "mach_temperature",
-                "mach_pressure",
-                "compression",
-                "div_v",
-                "temperature",
-                "entropy",
-                "temperature_jump",
-                "pressure_jump",
-                "density_jump",
-                "normal_x",
-                "normal_y",
-                "normal_z",
-            )
-        }
-        return ChunkedShockFinderResult(
-            output_root=output_root,
-            shock_mask=field_refs["shock_mask"],
-            shock_zone_mask=field_refs["shock_zone_mask"],
-            mach_temperature=field_refs["mach_temperature"],
-            mach_pressure=field_refs["mach_pressure"],
-            compression=field_refs["compression"],
-            div_v=field_refs["div_v"],
-            temperature=field_refs["temperature"],
-            entropy=field_refs["entropy"],
-            temperature_jump=field_refs["temperature_jump"],
-            pressure_jump=field_refs["pressure_jump"],
-            density_jump=field_refs["density_jump"],
-            normal_x=field_refs["normal_x"],
-            normal_y=field_refs["normal_y"],
-            normal_z=field_refs["normal_z"],
-            summary=summary,
-            full_shock_mask=field_refs["full_shock_mask"],
-        )
+        return _build_chunked_result(output_root, input_store.layout, summary)
 
 
 def analyze_cube_pass(
@@ -243,4 +207,62 @@ def analyze_cube_pass(
         jumps=jumps,
         mach_fields=mach_fields,
         full_shock_mask=full_shock_mask,
+    )
+
+
+def _build_reporter(progress: ProgressReporter) -> ProgressCallback:
+    if progress is True or progress is None:
+        return print
+    if progress is False:
+        return _noop_report
+    return progress
+
+
+def _noop_report(_: str) -> None:
+    return None
+
+
+def _build_chunked_result(
+    output_root: Path,
+    layout,
+    summary: dict[str, object],
+) -> ChunkedShockFinderResult:
+    field_refs = {
+        field_name: ChunkedFieldReference(path=output_root / field_name, layout=layout)
+        for field_name in (
+            "shock_mask",
+            "shock_zone_mask",
+            "full_shock_mask",
+            "mach_temperature",
+            "mach_pressure",
+            "compression",
+            "div_v",
+            "temperature",
+            "entropy",
+            "temperature_jump",
+            "pressure_jump",
+            "density_jump",
+            "normal_x",
+            "normal_y",
+            "normal_z",
+        )
+    }
+    return ChunkedShockFinderResult(
+        output_root=output_root,
+        shock_mask=field_refs["shock_mask"],
+        shock_zone_mask=field_refs["shock_zone_mask"],
+        mach_temperature=field_refs["mach_temperature"],
+        mach_pressure=field_refs["mach_pressure"],
+        compression=field_refs["compression"],
+        div_v=field_refs["div_v"],
+        temperature=field_refs["temperature"],
+        entropy=field_refs["entropy"],
+        temperature_jump=field_refs["temperature_jump"],
+        pressure_jump=field_refs["pressure_jump"],
+        density_jump=field_refs["density_jump"],
+        normal_x=field_refs["normal_x"],
+        normal_y=field_refs["normal_y"],
+        normal_z=field_refs["normal_z"],
+        summary=summary,
+        full_shock_mask=field_refs["full_shock_mask"],
     )

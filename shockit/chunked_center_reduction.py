@@ -1,4 +1,4 @@
-"""Compatibility wrapper for chunk-aware center reduction."""
+"""Compatibility wrapper for the optional/manual chunked center reducer."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ def reduce_chunked_shock_outputs(
     *,
     progress: bool = True,
 ) -> dict[str, object]:
-    """Compatibility wrapper around the chunking subpackage reducer."""
+    """Run the separate chunked center-reduction pass on existing chunked outputs."""
 
     output_path = Path(output_root)
     layout = load_chunk_layout(output_path / "full_shock_mask")

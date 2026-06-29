@@ -3,6 +3,8 @@
 This document describes the purpose of every test module under `tests/` and
 how to run the main test modes.
 
+For command-oriented test-running notes, see [docs/testing.md](testing.md).
+
 ## Running tests
 
 Run the default suite with the repo-local virtualenv:
@@ -52,6 +54,9 @@ For a true large-scale chunking run, set `SHOCKIT_STRESS_SHAPE=2048`.
 
 ### Core physics and numerics
 
+- `tests/test_physical_behavior.py`: deterministic no-shock and rejected-shock
+  fixtures such as uniform flow, pressure-without-compression, and compression
+  without thermodynamic jumps.
 - `tests/test_mach.py`: validates Mach inversion from pressure and temperature
   jumps and checks invalid jump handling.
 - `tests/test_gradients.py`: verifies periodic derivatives and divergence
@@ -79,6 +84,10 @@ For a true large-scale chunking run, set `SHOCKIT_STRESS_SHAPE=2048`.
 
 ### Chunking and chunk-aware reduction
 
+- `tests/test_chunk_layout_validation.py`: validates that chunk extents start at
+  zero, end at the full shape, and tile each axis without gaps or overlaps.
+- `tests/test_chunked_reader.py`: verifies periodic halo reads for interior,
+  boundary, corner, and larger-halo chunk requests.
 - `tests/test_chunking.py`: verifies required halo width and balanced chunk
   layout generation.
 - `tests/test_chunk_join.py`: checks reconstruction of a full field from chunk
@@ -103,6 +112,10 @@ For a true large-scale chunking run, set `SHOCKIT_STRESS_SHAPE=2048`.
 
 ### Package surface, validation, and docs
 
+- `tests/test_finder_api.py`: covers `ShockFinder.find()` dispatch, missing
+  chunked output, in-memory `output=` rejection, and bad-input type errors.
+- `tests/test_result_interface.py`: checks interface parity between in-memory
+  and chunked result objects.
 - `tests/test_validation.py`: validates configuration errors, bad array inputs,
   chunked `FluidCube` mode detection, and chunked layout consistency checks.
 - `tests/test_package_layout.py`: checks import smoke, explicit package exports,

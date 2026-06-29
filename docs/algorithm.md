@@ -99,9 +99,11 @@ than geometric thickness.
 
 Chunking is a workflow implementation detail, not a separate physics
 algorithm. The explicit chunked runner reads haloed primitive fields, applies
-the same local `analyze_cube_pass()` physics as the in-memory finder, and then
-reduces centers globally across chunk boundaries. Equivalent chunked and
-non-chunked inputs should agree within normal floating-point tolerance.
+the same local `analyze_cube_pass()` physics as the in-memory finder, and
+writes unreduced chunk-core outputs. The optional/manual chunked center
+reduction lives separately because it can be too memory-hungry for the default
+unified chunked workflow. Equivalent chunked and non-chunked unreduced outputs
+should agree within normal floating-point tolerance.
 
 ## Limitations
 

@@ -48,7 +48,7 @@ shock_mask = result.shock_mask
 ```python
 from shockit import FluidCube, ShockFinder, ShockFinderConfig
 
-config = ShockFinderConfig(min_mach=1.1, reduce_to_centers=True)
+config = ShockFinderConfig(min_mach=1.1, reduce_to_centers=False)
 cube = FluidCube(
     rho="chunked_snapshot/rho",
     pressure="chunked_snapshot/prs",
@@ -85,8 +85,12 @@ The chunked workflow:
 - reads primitive fields with periodic halo cells
 - runs the same local shock physics as the in-memory finder
 - writes chunk-core outputs without reconstructing the full cube
-- performs global center reduction across chunk boundaries
+- leaves `shock_mask` unreduced on disk in the default workflow
 - treats `.npz` as the first chunk-store implementation, not a core algorithm assumption
+
+Chunked center reduction is available as a separate advanced/manual step, but
+the unified chunked workflow does not run it by default because it can be too
+memory-hungry on large datasets.
 
 Advanced/manual chunked workflows are still available through:
 
@@ -176,6 +180,8 @@ Chunked API:
 ## Manual review
 
 - [docs/review_map.md](docs/review_map.md): file-by-file map for manual review
+- [docs/chunked_center_reduction.md](docs/chunked_center_reduction.md): how chunk-local labels become global centers
+- [docs/testing.md](docs/testing.md): default, focused, and stress-test commands
 - [docs/test_suite.md](docs/test_suite.md): test-by-test map and test-running notes
 
 ## Test suite
@@ -191,7 +197,7 @@ The included tests cover:
 - a Sod-like fixture
 - HDF5 field loading, including nested dataset paths
 - configuration and data validation
-- unified in-memory/chunked API equivalence and chunk-aware center reduction
+- unified in-memory/chunked API equivalence and unreduced chunked-output handling
 - repository hygiene checks for stale names and absolute links
 
 Run them with:
@@ -210,7 +216,8 @@ PNG files are written under `test_artifacts/plots/` by default. You can choose
 another directory with `--plot-dir`.
 
 For a module-by-module description of the suite, including the opt-in chunked
-stress test, see [docs/test_suite.md](docs/test_suite.md).
+stress test, see [docs/test_suite.md](docs/test_suite.md). For run modes and
+stress-test environment variables, see [docs/testing.md](docs/testing.md).
 
 ## Limitations
 

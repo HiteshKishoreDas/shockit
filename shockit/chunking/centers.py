@@ -12,7 +12,7 @@ from scipy import ndimage
 
 from ..config import ShockFinderConfig
 from ..derived import MachFields
-from ..masks import center_score
+from ..masks import center_score, reduce_to_centers
 from .layout import ChunkLayout, ChunkSpec
 from .reader import ChunkedInputStore
 from .writer import ChunkedOutputStore, NpzChunkedOutput
@@ -213,25 +213,65 @@ def _select_global_centers(
         groups.setdefault(union_find.find(ref), []).append(ref)
 
     if center_score_mode != "combined":
+        label_reader = label_store.field_reader("labels")
+        div_v_reader = fields.field_reader("div_v")
+        pressure_reader = fields.field_reader("mach_pressure")
+        temperature_reader = fields.field_reader("mach_temperature")
         centers: list[tuple[tuple[int, int, int], float, float]] = []
         for refs in groups.values():
-            # Match full-cube `reduce_to_centers()` tie-breaking by choosing
-            # the lowest flat index when multiple cells share the same score.
-            best = min(
-                (
-                    (
-                        -label_records[ref].best_score,
-                        label_records[ref].best_global_flat_index,
-                        label_records[ref],
-                    )
-                    for ref in refs
-                )
-            )[2]
-            center_index = tuple(
-                best.spec.start[axis] + best.best_local_index[axis]
-                for axis in range(3)
+            origin, group_mask, group_div_v, group_mach_fields = _assemble_group_fields(
+                refs,
+                label_records,
+                label_reader,
+                div_v_reader,
+                pressure_reader,
+                temperature_reader,
             )
-            centers.append((center_index, best.best_mach_pressure, best.best_mach_temperature))
+            _, local_component_count = ndimage.label(group_mask)
+            if local_component_count == 1:
+                reduced, _ = reduce_to_centers(
+                    group_mask,
+                    group_div_v,
+                    group_mach_fields,
+                    center_score_mode=center_score_mode,
+                )
+                best_local_index = tuple(int(value) for value in np.argwhere(reduced)[0])
+                best_global_index = tuple(origin[axis] + best_local_index[axis] for axis in range(3))
+                centers.append(
+                    (
+                        best_global_index,
+                        float(group_mach_fields.mach_pressure[best_local_index]),
+                        float(group_mach_fields.mach_temperature[best_local_index]),
+                    )
+                )
+                continue
+            best_candidate: tuple[float, int, tuple[int, int, int], float, float] | None = None
+            for ref in refs:
+                record = label_records[ref]
+                labels = label_reader.read_core(record.spec)
+                component = labels == ref.local_label
+                div_v = div_v_reader.read_core(record.spec)
+                mach_fields = MachFields(
+                    mach_pressure=pressure_reader.read_core(record.spec),
+                    mach_temperature=temperature_reader.read_core(record.spec),
+                )
+                score = center_score(component, div_v, mach_fields, mode=center_score_mode)
+                for local_index in zip(*np.where(component), strict=False):
+                    local_score = float(score[local_index])
+                    global_index = tuple(record.spec.start[axis] + local_index[axis] for axis in range(3))
+                    global_flat = int(np.ravel_multi_index(global_index, layout.shape))
+                    tie_break_flat = -global_flat if local_score > 0.0 else global_flat
+                    candidate = (
+                        -local_score,
+                        tie_break_flat,
+                        global_index,
+                        float(mach_fields.mach_pressure[local_index]),
+                        float(mach_fields.mach_temperature[local_index]),
+                    )
+                    if best_candidate is None or candidate[:2] < best_candidate[:2]:
+                        best_candidate = candidate
+            assert best_candidate is not None
+            centers.append((best_candidate[2], best_candidate[3], best_candidate[4]))
         return centers
 
     label_reader = label_store.field_reader("labels")
@@ -372,6 +412,45 @@ def _combined_score_ranges(
     mach_min = float(np.min(mach_concat)) if mach_concat.size else 0.0
     mach_max = float(np.max(mach_concat)) if mach_concat.size else 0.0
     return compression_min, compression_max, mach_min, mach_max
+
+
+def _assemble_group_fields(
+    refs: list[_LabelRef],
+    label_records: dict[_LabelRef, _LocalLabelRecord],
+    label_reader,
+    div_v_reader,
+    pressure_reader,
+    temperature_reader,
+) -> tuple[tuple[int, int, int], np.ndarray, np.ndarray, MachFields]:
+    start = tuple(min(label_records[ref].spec.start[axis] for ref in refs) for axis in range(3))
+    stop = tuple(max(label_records[ref].spec.stop[axis] for ref in refs) for axis in range(3))
+    shape = tuple(stop[axis] - start[axis] for axis in range(3))
+    mask = np.zeros(shape, dtype=bool)
+    div_v = np.zeros(shape, dtype=float)
+    mach_pressure = np.full(shape, np.nan, dtype=float)
+    mach_temperature = np.full(shape, np.nan, dtype=float)
+
+    for ref in refs:
+        spec = label_records[ref].spec
+        local_slices = tuple(
+            slice(spec.start[axis] - start[axis], spec.stop[axis] - start[axis])
+            for axis in range(3)
+        )
+        labels = label_reader.read_core(spec)
+        component = labels == ref.local_label
+        div_v_chunk = div_v_reader.read_core(spec)
+        mach_pressure_chunk = pressure_reader.read_core(spec)
+        mach_temperature_chunk = temperature_reader.read_core(spec)
+        mask_region = mask[local_slices]
+        div_v_region = div_v[local_slices]
+        mach_pressure_region = mach_pressure[local_slices]
+        mach_temperature_region = mach_temperature[local_slices]
+        mask_region[component] = True
+        div_v_region[component] = div_v_chunk[component]
+        mach_pressure_region[component] = mach_pressure_chunk[component]
+        mach_temperature_region[component] = mach_temperature_chunk[component]
+
+    return start, mask, div_v, MachFields(mach_pressure=mach_pressure, mach_temperature=mach_temperature)
 
 
 def _combined_component_score(

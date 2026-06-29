@@ -10,7 +10,6 @@ import numpy as np
 from ..config import ShockFinderConfig
 from ..fields import FluidCube
 from ..finder import analyze_cube_pass
-from .centers import finalize_chunked_shock_outputs
 from .reader import ChunkedInputStore
 from .writer import ChunkedOutputStore
 
@@ -71,7 +70,8 @@ def run_chunked_shock_finder(
 
     layout = input_store.layout
     halo = required_halo(config)
-    report(f"[1/2] Processing {len(layout.specs)} chunk files with halo width {halo}")
+    total_steps = 2 if config.reduce_to_centers else 1
+    report(f"[1/{total_steps}] Processing {len(layout.specs)} chunk files with halo width {halo}")
 
     primitive_readers = {
         name: input_store.field_reader(name)
@@ -83,7 +83,7 @@ def run_chunked_shock_finder(
     full_mach_temperature_values: list[np.ndarray] = []
 
     for chunk_index, spec in enumerate(layout.specs, start=1):
-        report(f"[1/2] Chunk {chunk_index}/{len(layout.specs)} {spec.start}->{spec.stop}")
+        report(f"[1/{total_steps}] Chunk {chunk_index}/{len(layout.specs)} {spec.start}->{spec.stop}")
         local_cube = FluidCube(
             rho=primitive_readers["rho"].read_with_halo(spec, halo),
             pressure=primitive_readers["pressure"].read_with_halo(spec, halo),
@@ -132,12 +132,10 @@ def run_chunked_shock_finder(
         config=config,
         gamma=gamma,
     )
-    return finalize_chunked_shock_outputs(
-        output_store,
-        config,
-        base_summary,
-        progress=progress_callback is not None,
-    )
+    if config.reduce_to_centers:
+        report("[2/2] Skipping chunked center reduction; leaving shock_mask equal to full_shock_mask")
+    output_store.write_summary(base_summary)
+    return base_summary
 
 
 def _base_summary(
@@ -162,7 +160,10 @@ def _base_summary(
         "full_shock_cells": full_shock_cells,
         "full_shock_fraction": full_shock_cells / total_cells,
         "n_connected_components": 0,
-        "mask_semantics": "shock_mask matches full_shock_mask until center reduction runs",
+        "mask_semantics": (
+            "shock_mask matches full_shock_mask; "
+            "chunked center reduction is skipped in the default workflow"
+        ),
         "mach_pressure_min": _finite_stat(mach_pressure, np.min),
         "mach_pressure_median": _finite_stat(mach_pressure, np.median),
         "mach_pressure_max": _finite_stat(mach_pressure, np.max),
@@ -178,7 +179,8 @@ def _base_summary(
         "min_mach": config.min_mach,
         "gamma": gamma,
         "shock_width_cells": config.shock_width_cells,
-        "reduce_to_centers": config.reduce_to_centers,
+        "reduce_to_centers": False,
+        "requested_reduce_to_centers": config.reduce_to_centers,
         "center_score": config.center_score,
         "sampling_method": config.sampling_method,
     }
