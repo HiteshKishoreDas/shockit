@@ -1,4 +1,4 @@
-# ShocKit
+![ShocKit logo](logo.png)
 
 A Python toolkit for shock detection and characterization in simulation data.
 
