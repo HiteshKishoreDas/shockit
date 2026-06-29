@@ -148,8 +148,9 @@ def test_chunked_center_reduction_merges_periodic_boundary_component(tmp_path) -
     reduced = join_chunked_field(tmp_path / "shock_mask")
 
     assert summary["n_connected_components"] == 1
-    assert summary["shock_cells"] == 1
-    assert np.count_nonzero(reduced) == 1
+    assert summary["shock_cells"] == 2
+    assert np.count_nonzero(reduced) == 2
+    assert reduced[0, 1, 1]
     assert reduced[-1, 1, 1]
 
 

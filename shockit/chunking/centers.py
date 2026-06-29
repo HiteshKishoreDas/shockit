@@ -12,7 +12,7 @@ from scipy import ndimage
 
 from ..config import ShockFinderConfig
 from ..derived import MachFields
-from ..masks import center_score, reduce_to_centers
+from ..masks import center_score
 from .layout import ChunkLayout, ChunkSpec
 from .reader import ChunkedInputStore
 from .writer import ChunkedOutputStore, NpzChunkedOutput
@@ -82,8 +82,16 @@ def finalize_chunked_shock_outputs(
     labels_root = output_store.root / ".local_labels"
     shutil.rmtree(labels_root, ignore_errors=True)
     label_store = NpzChunkedOutput(labels_root, output_store.layout)
-    label_records, union_find = _label_local_components(fields, label_store, config.center_score)
-    n_connected_components = _merge_boundary_components(output_store.layout, union_find, label_store)
+    label_records, base_union_find = _label_local_components(fields, label_store, config.center_score)
+    center_union_find = _copy_union_find(base_union_find)
+    summary_union_find = _copy_union_find(base_union_find)
+    _merge_boundary_components(output_store.layout, center_union_find, label_store, periodic=False)
+    n_connected_components = _merge_boundary_components(
+        output_store.layout,
+        summary_union_find,
+        label_store,
+        periodic=True,
+    )
 
     summary = dict(base_summary)
     summary["n_connected_components"] = n_connected_components
@@ -111,7 +119,7 @@ def finalize_chunked_shock_outputs(
         fields=fields,
         label_store=label_store,
         label_records=label_records,
-        union_find=union_find,
+        union_find=center_union_find,
         center_score_mode=config.center_score,
     )
     _write_center_mask(output_store, centers)
@@ -191,9 +199,11 @@ def _merge_boundary_components(
     layout: ChunkLayout,
     union_find: _UnionFind,
     label_store: ChunkedOutputStore,
+    *,
+    periodic: bool,
 ) -> int:
     label_reader = label_store.field_reader("labels")
-    for axis, spec_a, spec_b in layout.iter_face_neighbor_pairs(periodic=True):
+    for axis, spec_a, spec_b in layout.iter_face_neighbor_pairs(periodic=periodic):
         labels_a = label_reader.read_core(spec_a)
         labels_b = label_reader.read_core(spec_b)
         face_a = np.take(labels_a, indices=-1, axis=axis)
@@ -210,6 +220,12 @@ def _merge_boundary_components(
     return len({union_find.find(item) for item in union_find.parent})
 
 
+def _copy_union_find(union_find: _UnionFind) -> _UnionFind:
+    copied = _UnionFind()
+    copied.parent = dict(union_find.parent)
+    return copied
+
+
 def _select_global_centers(
     layout: ChunkLayout,
     fields: ChunkedInputStore,
@@ -223,66 +239,15 @@ def _select_global_centers(
         groups.setdefault(union_find.find(ref), []).append(ref)
 
     if center_score_mode != "combined":
-        label_reader = label_store.field_reader("labels")
-        div_v_reader = fields.field_reader("div_v")
-        pressure_reader = fields.field_reader("mach_pressure")
-        temperature_reader = fields.field_reader("mach_temperature")
-        centers: list[tuple[tuple[int, int, int], float, float]] = []
-        for refs in groups.values():
-            origin, group_mask, group_div_v, group_mach_fields = _assemble_group_fields(
-                refs,
-                label_records,
-                label_reader,
-                div_v_reader,
-                pressure_reader,
-                temperature_reader,
-            )
-            _, local_component_count = ndimage.label(group_mask)
-            if local_component_count == 1:
-                reduced, _ = reduce_to_centers(
-                    group_mask,
-                    group_div_v,
-                    group_mach_fields,
-                    center_score_mode=center_score_mode,
-                )
-                best_local_index = tuple(int(value) for value in np.argwhere(reduced)[0])
-                best_global_index = tuple(origin[axis] + best_local_index[axis] for axis in range(3))
-                centers.append(
-                    (
-                        best_global_index,
-                        float(group_mach_fields.mach_pressure[best_local_index]),
-                        float(group_mach_fields.mach_temperature[best_local_index]),
-                    )
-                )
-                continue
-            best_candidate: tuple[float, int, tuple[int, int, int], float, float] | None = None
-            for ref in refs:
-                record = label_records[ref]
-                labels = label_reader.read_core(record.spec)
-                component = labels == ref.local_label
-                div_v = div_v_reader.read_core(record.spec)
-                mach_fields = MachFields(
-                    mach_pressure=pressure_reader.read_core(record.spec),
-                    mach_temperature=temperature_reader.read_core(record.spec),
-                )
-                score = center_score(component, div_v, mach_fields, mode=center_score_mode)
-                for local_index in zip(*np.where(component), strict=False):
-                    local_score = float(score[local_index])
-                    global_index = tuple(record.spec.start[axis] + local_index[axis] for axis in range(3))
-                    global_flat = int(np.ravel_multi_index(global_index, layout.shape))
-                    tie_break_flat = -global_flat if local_score > 0.0 else global_flat
-                    candidate = (
-                        -local_score,
-                        tie_break_flat,
-                        global_index,
-                        float(mach_fields.mach_pressure[local_index]),
-                        float(mach_fields.mach_temperature[local_index]),
-                    )
-                    if best_candidate is None or candidate[:2] < best_candidate[:2]:
-                        best_candidate = candidate
-            assert best_candidate is not None
-            centers.append((best_candidate[2], best_candidate[3], best_candidate[4]))
-        return centers
+        return _select_global_centers_simple_mode(
+            layout=layout,
+            fields=fields,
+            label_store=label_store,
+            label_records=label_records,
+            groups=groups,
+            union_find=union_find,
+            center_score_mode=center_score_mode,
+        )
 
     label_reader = label_store.field_reader("labels")
     div_v_reader = fields.field_reader("div_v")
@@ -424,6 +389,62 @@ def _combined_score_ranges(
     return compression_min, compression_max, mach_min, mach_max
 
 
+def _select_global_centers_simple_mode(
+    *,
+    layout: ChunkLayout,
+    fields: ChunkedInputStore,
+    label_store: ChunkedOutputStore,
+    label_records: dict[_LabelRef, _LocalLabelRecord],
+    groups: dict[_LabelRef, list[_LabelRef]],
+    union_find: _UnionFind,
+    center_score_mode: str,
+) -> list[tuple[tuple[int, int, int], float, float]]:
+    label_reader = label_store.field_reader("labels")
+    score_reader = fields.field_reader(_score_field_name(center_score_mode))
+    pressure_reader = fields.field_reader("mach_pressure")
+    temperature_reader = fields.field_reader("mach_temperature")
+
+    group_ids = {root_ref: group_index for group_index, root_ref in enumerate(groups, start=1)}
+    merged_labels = np.zeros(layout.shape, dtype=np.int32)
+    score = np.zeros(layout.shape, dtype=float)
+    mach_pressure_cache: dict[tuple[int, int, int], np.ndarray] = {}
+    mach_temperature_cache: dict[tuple[int, int, int], np.ndarray] = {}
+    specs_by_grid = {spec.grid_index: spec for spec in layout.specs}
+
+    for spec in layout.specs:
+        chunk_slice = tuple(slice(spec.start[axis], spec.stop[axis]) for axis in range(3))
+        labels = label_reader.read_core(spec)
+        merged_chunk = np.zeros(spec.core_shape, dtype=np.int32)
+        for local_label in np.unique(labels):
+            if local_label <= 0:
+                continue
+            root_ref = union_find.find(_LabelRef(spec.grid_index, int(local_label)))
+            merged_chunk[labels == local_label] = group_ids[root_ref]
+        merged_labels[chunk_slice] = merged_chunk
+        score[chunk_slice] = _simple_score_chunk(score_reader.read_core(spec), center_score_mode)
+        mach_pressure_cache[spec.grid_index] = pressure_reader.read_core(spec)
+        mach_temperature_cache[spec.grid_index] = temperature_reader.read_core(spec)
+
+    positions = ndimage.maximum_position(
+        score,
+        labels=merged_labels,
+        index=np.arange(1, len(groups) + 1),
+    )
+    centers: list[tuple[tuple[int, int, int], float, float]] = []
+    for position in positions:
+        global_index = tuple(int(value) for value in position)
+        spec = _spec_for_global_index(layout, specs_by_grid, global_index)
+        local_index = tuple(global_index[axis] - spec.start[axis] for axis in range(3))
+        centers.append(
+            (
+                global_index,
+                float(mach_pressure_cache[spec.grid_index][local_index]),
+                float(mach_temperature_cache[spec.grid_index][local_index]),
+            )
+        )
+    return centers
+
+
 def _assemble_group_fields(
     refs: list[_LabelRef],
     label_records: dict[_LabelRef, _LocalLabelRecord],
@@ -491,6 +512,38 @@ def _normalize_values(values: np.ndarray, vmin: float, vmax: float) -> np.ndarra
     if vmax <= vmin:
         return np.ones(values.shape, dtype=float)
     return (values - vmin) / (vmax - vmin)
+
+
+def _score_field_name(center_score_mode: str) -> str:
+    if center_score_mode == "compression":
+        return "div_v"
+    if center_score_mode == "mach_pressure":
+        return "mach_pressure"
+    if center_score_mode == "mach_temperature":
+        return "mach_temperature"
+    raise ValueError(f"Unsupported simple center-score mode: {center_score_mode}")
+
+
+def _simple_score_chunk(values: np.ndarray, center_score_mode: str) -> np.ndarray:
+    if center_score_mode == "compression":
+        return -values
+    return np.nan_to_num(values, nan=-np.inf)
+
+
+def _spec_for_global_index(
+    layout: ChunkLayout,
+    specs_by_grid: dict[tuple[int, int, int], ChunkSpec],
+    global_index: tuple[int, int, int],
+) -> ChunkSpec:
+    grid_index = []
+    for axis, axis_slices in enumerate(layout.axis_slices):
+        for axis_index, axis_slice in enumerate(axis_slices):
+            if axis_slice.start <= global_index[axis] < axis_slice.stop:
+                grid_index.append(axis_index)
+                break
+        else:
+            raise ValueError(f"Index {global_index} falls outside chunk layout.")
+    return specs_by_grid[tuple(grid_index)]
 
 
 def _write_center_mask(
