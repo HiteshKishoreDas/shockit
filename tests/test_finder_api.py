@@ -8,6 +8,7 @@ import pytest
 from shockit import FluidCube, ShockFinder, ShockFinderConfig
 from shockit.chunking import save_chunked_field
 from shockit.result import ChunkedShockFinderResult, ShockFinderResult
+from tests.helpers import make_planar_shock_cube
 
 
 def _in_memory_cube() -> FluidCube:
@@ -37,6 +38,25 @@ def _chunked_cube(root: Path) -> FluidCube:
     )
 
 
+def _chunked_planar_shock_cube(root: Path) -> tuple[FluidCube, FluidCube]:
+    cube = make_planar_shock_cube(mach=2.0, n=12)
+    save_chunked_field("rho", cube.rho, root, target_chunk_size=5)
+    save_chunked_field("prs", cube.pressure, root, target_chunk_size=5)
+    save_chunked_field("v1", cube.vx, root, target_chunk_size=5)
+    save_chunked_field("v2", cube.vy, root, target_chunk_size=5)
+    save_chunked_field("v3", cube.vz, root, target_chunk_size=5)
+    return (
+        FluidCube(
+            rho=root / "rho",
+            pressure=root / "prs",
+            vx=root / "v1",
+            vy=root / "v2",
+            vz=root / "v3",
+        ),
+        cube,
+    )
+
+
 def test_find_returns_in_memory_result_for_array_backed_cube() -> None:
     result = ShockFinder(ShockFinderConfig(min_mach=1.1, reduce_to_centers=False)).find(
         _in_memory_cube(),
@@ -56,17 +76,20 @@ def test_find_returns_chunked_result_for_path_backed_cube(tmp_path: Path) -> Non
     assert isinstance(result, ChunkedShockFinderResult)
 
 
-def test_find_keeps_chunked_outputs_unreduced_even_when_center_reduction_is_requested(tmp_path: Path) -> None:
-    result = ShockFinder(ShockFinderConfig(min_mach=1.1, reduce_to_centers=True)).find(
-        _chunked_cube(tmp_path / "input"),
+def test_find_reduces_chunked_outputs_when_center_reduction_is_requested(tmp_path: Path) -> None:
+    chunked_cube, full_cube = _chunked_planar_shock_cube(tmp_path / "input")
+    config = ShockFinderConfig(min_mach=1.1, reduce_to_centers=True)
+    result = ShockFinder(config).find(
+        chunked_cube,
         output=tmp_path / "output",
         progress=False,
     )
+    full_result = ShockFinder(config).find(full_cube, progress=False)
 
     assert isinstance(result, ChunkedShockFinderResult)
-    np.testing.assert_array_equal(result.shock_mask.load(), result.full_shock_mask.load())
-    assert result.summary["reduce_to_centers"] is False
-    assert result.summary["requested_reduce_to_centers"] is True
+    np.testing.assert_array_equal(result.shock_mask.load(), full_result.shock_mask)
+    np.testing.assert_array_equal(result.full_shock_mask.load(), full_result.full_shock_mask)
+    assert result.summary["reduce_to_centers"] is True
 
 
 def test_find_rejects_output_for_in_memory_cube(tmp_path: Path) -> None:

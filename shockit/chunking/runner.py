@@ -10,29 +10,15 @@ import numpy as np
 from ..config import ShockFinderConfig
 from ..fields import FluidCube
 from ..finder import analyze_cube_pass
+from ..result import RESULT_FIELD_NAMES
+from .centers import finalize_chunked_shock_outputs
 from .reader import ChunkedInputStore
 from .writer import ChunkedOutputStore
 
 ProgressCallback = Callable[[str], None]
 ProgressReporter = ProgressCallback | Literal[True, False] | None
 
-OUTPUT_FIELDS = (
-    "shock_mask",
-    "shock_zone_mask",
-    "full_shock_mask",
-    "mach_temperature",
-    "mach_pressure",
-    "compression",
-    "div_v",
-    "temperature",
-    "entropy",
-    "temperature_jump",
-    "pressure_jump",
-    "density_jump",
-    "normal_x",
-    "normal_y",
-    "normal_z",
-)
+OUTPUT_FIELDS = RESULT_FIELD_NAMES
 
 
 def required_halo(config: ShockFinderConfig) -> int:
@@ -132,10 +118,15 @@ def run_chunked_shock_finder(
         config=config,
         gamma=gamma,
     )
-    if config.reduce_to_centers:
-        report("[2/2] Skipping chunked center reduction; leaving shock_mask equal to full_shock_mask")
-    output_store.write_summary(base_summary)
-    return base_summary
+    if not config.reduce_to_centers:
+        output_store.write_summary(base_summary)
+        return base_summary
+    return finalize_chunked_shock_outputs(
+        output_store,
+        config,
+        base_summary,
+        progress=progress,
+    )
 
 
 def _base_summary(
@@ -160,10 +151,7 @@ def _base_summary(
         "full_shock_cells": full_shock_cells,
         "full_shock_fraction": full_shock_cells / total_cells,
         "n_connected_components": 0,
-        "mask_semantics": (
-            "shock_mask matches full_shock_mask; "
-            "chunked center reduction is skipped in the default workflow"
-        ),
+        "mask_semantics": "shock_mask matches full_shock_mask; center reduction disabled",
         "mach_pressure_min": _finite_stat(mach_pressure, np.min),
         "mach_pressure_median": _finite_stat(mach_pressure, np.median),
         "mach_pressure_max": _finite_stat(mach_pressure, np.max),
@@ -179,8 +167,7 @@ def _base_summary(
         "min_mach": config.min_mach,
         "gamma": gamma,
         "shock_width_cells": config.shock_width_cells,
-        "reduce_to_centers": False,
-        "requested_reduce_to_centers": config.reduce_to_centers,
+        "reduce_to_centers": config.reduce_to_centers,
         "center_score": config.center_score,
         "sampling_method": config.sampling_method,
     }

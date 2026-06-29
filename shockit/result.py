@@ -10,6 +10,24 @@ import numpy as np
 
 from .storage import ChunkedFieldReference
 
+RESULT_FIELD_NAMES = (
+    "shock_mask",
+    "shock_zone_mask",
+    "full_shock_mask",
+    "mach_temperature",
+    "mach_pressure",
+    "compression",
+    "div_v",
+    "temperature",
+    "entropy",
+    "temperature_jump",
+    "pressure_jump",
+    "density_jump",
+    "normal_x",
+    "normal_y",
+    "normal_z",
+)
+
 
 @dataclass
 class ShockFinderResult:

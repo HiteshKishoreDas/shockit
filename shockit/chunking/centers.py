@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
 import shutil
 from typing import Any
 
@@ -16,6 +16,9 @@ from ..masks import center_score, reduce_to_centers
 from .layout import ChunkLayout, ChunkSpec
 from .reader import ChunkedInputStore
 from .writer import ChunkedOutputStore, NpzChunkedOutput
+
+ProgressCallback = Callable[[str], None]
+ProgressReporter = ProgressCallback | bool | None
 
 
 @dataclass(frozen=True)
@@ -61,12 +64,19 @@ def finalize_chunked_shock_outputs(
     config: ShockFinderConfig,
     base_summary: dict[str, Any],
     *,
-    progress: bool = True,
+    progress: ProgressReporter = True,
 ) -> dict[str, Any]:
     """Finalize connected-component accounting and optional center reduction."""
 
-    if progress:
-        print("[2/2] Reducing connected components across chunk boundaries")
+    if progress is True or progress is None:
+        progress_callback: ProgressCallback | None = print
+    elif progress is False:
+        progress_callback = None
+    else:
+        progress_callback = progress
+
+    if progress_callback is not None:
+        progress_callback("[2/2] Reducing connected components across chunk boundaries")
 
     fields = output_store
     labels_root = output_store.root / ".local_labels"
@@ -484,7 +494,7 @@ def _normalize_values(values: np.ndarray, vmin: float, vmax: float) -> np.ndarra
 
 
 def _write_center_mask(
-    output_store: NpzChunkedOutput,
+    output_store: ChunkedOutputStore,
     centers: list[tuple[tuple[int, int, int], float, float]],
 ) -> None:
     centers_by_grid: dict[tuple[int, int, int], list[tuple[int, int, int]]] = {}

@@ -153,7 +153,7 @@ def test_chunked_runner_oblique_matches_full_cube(tmp_path) -> None:
     np.testing.assert_allclose(join_chunked_field(output_root / "mach_temperature"), full_result.mach_temperature, equal_nan=True, atol=1e-10, rtol=1e-10)
 
 
-def test_chunked_runner_skips_center_reduction_even_when_requested(tmp_path) -> None:
+def test_chunked_runner_center_reduction_matches_full_cube(tmp_path) -> None:
     cube = make_planar_shock_cube(mach=2.0, n=18)
     input_root = tmp_path / "input"
     output_root = tmp_path / "output"
@@ -172,19 +172,14 @@ def test_chunked_runner_skips_center_reduction_even_when_requested(tmp_path) -> 
         config=config,
         progress=False,
     )
-    unreduced_result = ShockFinder(
-        ShockFinderConfig(
-            reduce_to_centers=False,
-            min_mach=1.1,
-            sampling_method="nearest_axis",
-        )
-    ).find(cube, progress=False)
+    full_result = ShockFinder(config).find(cube, progress=False)
 
-    np.testing.assert_array_equal(join_chunked_field(output_root / "shock_mask"), unreduced_result.full_shock_mask)
-    assert summary["shock_cells"] == unreduced_result.summary["full_shock_cells"]
-    assert summary["full_shock_cells"] == unreduced_result.summary["full_shock_cells"]
-    assert summary["reduce_to_centers"] is False
-    assert summary["requested_reduce_to_centers"] is True
+    np.testing.assert_array_equal(join_chunked_field(output_root / "shock_mask"), full_result.shock_mask)
+    np.testing.assert_array_equal(join_chunked_field(output_root / "full_shock_mask"), full_result.full_shock_mask)
+    assert summary["shock_cells"] == full_result.summary["shock_cells"]
+    assert summary["full_shock_cells"] == full_result.summary["full_shock_cells"]
+    assert summary["reduce_to_centers"] is True
+    assert summary["mask_semantics"] == "shock_mask is center-reduced; full_shock_mask is unreduced"
 
 
 def test_chunked_runner_periodic_edge_matches_full_cube_without_center_reduction(tmp_path) -> None:
@@ -213,3 +208,30 @@ def test_chunked_runner_periodic_edge_matches_full_cube_without_center_reduction
     np.testing.assert_array_equal(join_chunked_field(output_root / "shock_mask"), full_result.shock_mask)
     np.testing.assert_allclose(join_chunked_field(output_root / "mach_pressure"), full_result.mach_pressure, equal_nan=True)
     np.testing.assert_allclose(join_chunked_field(output_root / "mach_temperature"), full_result.mach_temperature, equal_nan=True)
+
+
+def test_chunked_runner_periodic_edge_center_reduction_matches_full_cube(tmp_path) -> None:
+    cube = make_periodic_edge_shock_cube(mach=2.0, n=18)
+    input_root = tmp_path / "input"
+    output_root = tmp_path / "output"
+    _write_chunked_input(cube, input_root, chunk_size=6)
+
+    config = ShockFinderConfig(
+        reduce_to_centers=True,
+        min_mach=1.1,
+        sampling_method="nearest_axis",
+    )
+    input_store = NpzChunkedInput(input_root)
+    output_store = NpzChunkedOutput(output_root, input_store.layout)
+    summary = run_chunked_shock_finder(
+        input_store,
+        output_store,
+        config=config,
+        progress=False,
+    )
+    full_result = ShockFinder(config).find(cube, progress=False)
+
+    np.testing.assert_array_equal(join_chunked_field(output_root / "shock_mask"), full_result.shock_mask)
+    np.testing.assert_array_equal(join_chunked_field(output_root / "full_shock_mask"), full_result.full_shock_mask)
+    assert summary["shock_cells"] == full_result.summary["shock_cells"]
+    assert summary["n_connected_components"] == 1

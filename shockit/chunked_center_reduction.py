@@ -1,4 +1,4 @@
-"""Compatibility wrapper for the optional/manual chunked center reducer."""
+"""Compatibility wrapper for the standalone chunked center reducer."""
 
 from __future__ import annotations
 

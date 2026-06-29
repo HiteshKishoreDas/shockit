@@ -85,12 +85,13 @@ The chunked workflow:
 - reads primitive fields with periodic halo cells
 - runs the same local shock physics as the in-memory finder
 - writes chunk-core outputs without reconstructing the full cube
-- leaves `shock_mask` unreduced on disk in the default workflow
+- runs chunk-aware center reduction when `reduce_to_centers=True`
+- leaves `shock_mask == full_shock_mask` when `reduce_to_centers=False`
 - treats `.npz` as the first chunk-store implementation, not a core algorithm assumption
 
-Chunked center reduction is available as a separate advanced/manual step, but
-the unified chunked workflow does not run it by default because it can be too
-memory-hungry on large datasets.
+The same `reduce_to_centers` option has the same meaning for in-memory and
+chunked inputs. A standalone reducer is still available for existing on-disk
+outputs when needed.
 
 Advanced/manual chunked workflows are still available through:
 
@@ -197,7 +198,7 @@ The included tests cover:
 - a Sod-like fixture
 - HDF5 field loading, including nested dataset paths
 - configuration and data validation
-- unified in-memory/chunked API equivalence and unreduced chunked-output handling
+- unified in-memory/chunked API equivalence, including chunked center reduction
 - repository hygiene checks for stale names and absolute links
 
 Run them with:

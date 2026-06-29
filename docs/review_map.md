@@ -60,11 +60,11 @@
 3. `chunking/runner.py`
    - chunked orchestration over haloed local cubes
    - invariants: uses the same `analyze_cube_pass()` physics as the in-memory path
-   - converts chunked `FluidCube` storage into local in-memory chunks plus unreduced chunked outputs
+   - converts chunked `FluidCube` storage into local in-memory chunks, writes chunk-core outputs, and dispatches chunk-aware center reduction when requested
 
 4. `chunking/centers.py`
-   - optional/manual local labels, boundary merging, and global center reduction
-   - invariants: not part of the default unified chunked workflow
+   - local labels, boundary merging, and global center reduction for chunked outputs
+   - invariants: merges across interior and periodic chunk faces without reconstructing the full cube
 
 5. `chunking/writer.py`
    - chunked field writer protocol and `.npz` output implementation
@@ -97,7 +97,7 @@
    - complete inventory of test modules and what each one covers
 
 3. `docs/chunked_center_reduction.md`
-   - optional/manual center-reduction algorithm and why it is not on the default chunked path
+   - chunk-aware center-reduction algorithm used by the unified chunked path
 
 4. `tests/test_chunked_finder.py` and `tests/test_center_reduction.py`
    - main regression path for unified chunked equivalence plus the separate reducer

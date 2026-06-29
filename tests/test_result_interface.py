@@ -6,28 +6,11 @@ import numpy as np
 
 from shockit import FluidCube, ShockFinder, ShockFinderConfig
 from shockit.chunking import save_chunked_field
-from shockit.result import ChunkedShockFinderResult, ShockFinderResult
+from shockit.result import ChunkedShockFinderResult, RESULT_FIELD_NAMES, ShockFinderResult
 from shockit.storage import ChunkedFieldReference
 from tests.helpers import make_planar_shock_cube
 
-FIELD_NAMES = (
-    "shock_mask",
-    "shock_zone_mask",
-    "full_shock_mask",
-    "mach_pressure",
-    "mach_temperature",
-    "compression",
-    "div_v",
-    "temperature",
-    "entropy",
-    "pressure_jump",
-    "temperature_jump",
-    "density_jump",
-    "normal_x",
-    "normal_y",
-    "normal_z",
-    "summary",
-)
+FIELD_NAMES = (*RESULT_FIELD_NAMES, "summary")
 
 
 def _chunked_cube(root: Path) -> FluidCube:

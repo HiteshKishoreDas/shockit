@@ -1,11 +1,11 @@
 # Chunked center reduction
 
-This document describes the optional/manual chunked center-reduction pass.
-The default unified chunked workflow does not run this step because it can be
-too memory-hungry on large datasets.
+This document describes the chunk-aware center-reduction pass used by the
+unified chunked workflow when `reduce_to_centers=True`.
 
-When run manually, the reducer turns unreduced shock cells into representative
-center cells without reconstructing every output field as one full 3D array.
+The same reducer is also available as a standalone pass for existing on-disk
+chunked outputs, without reconstructing every output field as one full 3D
+array.
 
 ## Overview
 

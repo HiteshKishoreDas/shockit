@@ -21,7 +21,7 @@ from .derived import (
 )
 from .fields import FluidCube
 from .masks import build_final_shock_mask, build_shock_zone_mask, reduce_to_centers
-from .result import ChunkedShockFinderResult, ShockFinderResult
+from .result import ChunkedShockFinderResult, RESULT_FIELD_NAMES, ShockFinderResult
 from .sampling import SampledJumps, sample_jumps
 from .storage import ChunkedFieldReference
 from .summary import make_summary
@@ -60,7 +60,7 @@ class ShockFinder:
         report = _build_reporter(progress)
 
         if cube.is_chunked:
-            return self._find_chunked(cube, output=output, progress=progress, report=report)
+            return self._find_chunked(cube, output=output, progress=progress)
         if output is not None:
             raise ValueError(
                 "output= is only used for chunked FluidCube inputs; "
@@ -122,7 +122,6 @@ class ShockFinder:
         *,
         output: str | Path | None,
         progress: ProgressReporter,
-        report: ProgressCallback,
     ) -> ChunkedShockFinderResult:
         if output is None:
             raise ValueError(
@@ -134,8 +133,6 @@ class ShockFinder:
         input_store = NpzChunkedInput.from_fluid_cube(cube)
         output_root = Path(output)
         output_store = NpzChunkedOutput(output_root, input_store.layout)
-        if self.config.reduce_to_centers:
-            report("[chunked] Skipping center reduction; chunked outputs stay unreduced to avoid memory blowups")
         summary = run_chunked_shock_finder(
             input_store,
             output_store,
@@ -229,23 +226,7 @@ def _build_chunked_result(
 ) -> ChunkedShockFinderResult:
     field_refs = {
         field_name: ChunkedFieldReference(path=output_root / field_name, layout=layout)
-        for field_name in (
-            "shock_mask",
-            "shock_zone_mask",
-            "full_shock_mask",
-            "mach_temperature",
-            "mach_pressure",
-            "compression",
-            "div_v",
-            "temperature",
-            "entropy",
-            "temperature_jump",
-            "pressure_jump",
-            "density_jump",
-            "normal_x",
-            "normal_y",
-            "normal_z",
-        )
+        for field_name in RESULT_FIELD_NAMES
     }
     return ChunkedShockFinderResult(
         output_root=output_root,
