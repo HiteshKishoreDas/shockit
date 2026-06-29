@@ -13,6 +13,9 @@ def test_output_hdf5_masks_include_descriptions(tmp_path) -> None:
     save_result_hdf5(str(output_path), result)
 
     with h5py.File(output_path, "r") as handle:
+        assert handle["shock_mask"].dtype == bool
+        assert handle["shock_mask"].attrs["semantic_type"] == "boolean_mask"
+        assert handle["shock_mask"].attrs["stored_dtype"] == "bool"
         assert "description" in handle["shock_zone_mask"].attrs
         assert "description" in handle["full_shock_mask"].attrs
         assert "description" in handle["shock_mask"].attrs
@@ -27,3 +30,7 @@ def test_output_hdf5_masks_include_descriptions(tmp_path) -> None:
         )
         assert handle["mach_pressure"].attrs["description"] == "Local Mach estimate from pressure jump."
         assert handle["mach_temperature"].attrs["description"] == "Local Mach estimate from temperature jump."
+        assert handle.attrs["package_name"] == "shockit"
+        assert "package_version" in handle.attrs
+        assert "mach_field_note" in handle.attrs
+        assert "shock_cells" in handle.attrs

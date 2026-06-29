@@ -66,10 +66,13 @@ def test_run_npz_shock_finder_chunked_matches_direct_chunked_pipeline(tmp_path) 
 
     config = ShockFinderConfig(reduce_to_centers=True, min_mach=1.1)
     summary = run_npz_shock_finder(tmp_path, config, progress=False)
-    result = ShockFinder(config).find(cube, progress=False)
+    unreduced_result = ShockFinder(
+        ShockFinderConfig(reduce_to_centers=False, min_mach=1.1)
+    ).find(cube, progress=False)
 
     output_root = tmp_path / "shock_chunked_npz"
-    np.testing.assert_array_equal(join_chunked_field(output_root / "shock_mask"), result.shock_mask)
-    assert summary["shock_cells"] == result.summary["shock_cells"]
+    np.testing.assert_array_equal(join_chunked_field(output_root / "shock_mask"), unreduced_result.full_shock_mask)
+    assert summary["shock_cells"] == unreduced_result.summary["full_shock_cells"]
+    assert summary["requested_reduce_to_centers"] is True
     stored_summary = json.loads((output_root / "summary.json").read_text())
-    assert stored_summary["shock_cells"] == result.summary["shock_cells"]
+    assert stored_summary["shock_cells"] == unreduced_result.summary["full_shock_cells"]

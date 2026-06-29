@@ -5,7 +5,7 @@ import pytest
 
 from shockit import FluidCube, ShockFinderConfig
 from shockit.chunking import save_chunked_field
-from shockit.fields import ChunkedFieldReference
+from shockit.storage import ChunkedFieldReference
 
 
 @pytest.mark.parametrize(
@@ -82,6 +82,24 @@ def test_fluid_cube_detects_in_memory_mode() -> None:
     assert cube.is_in_memory
     assert not cube.is_chunked
     assert cube.storage_mode == "in_memory"
+    assert cube.shape == (2, 2, 2)
+    assert cube.rho.dtype == float
+    assert cube.pressure.dtype == float
+    assert cube.vx.dtype == float
+
+
+def test_fluid_cube_converts_in_memory_fields_to_float_arrays() -> None:
+    cube = FluidCube(
+        rho=np.ones((2, 2, 2), dtype=np.int16),
+        pressure=np.full((2, 2, 2), 2, dtype=np.int32),
+        vx=np.zeros((2, 2, 2), dtype=np.int8),
+        vy=np.zeros((2, 2, 2), dtype=np.int8),
+        vz=np.zeros((2, 2, 2), dtype=np.int8),
+    )
+
+    assert cube.rho.dtype == float
+    assert cube.pressure.dtype == float
+    assert cube.vx.dtype == float
 
 
 def test_fluid_cube_detects_chunked_mode(tmp_path) -> None:
@@ -107,6 +125,108 @@ def test_fluid_cube_detects_chunked_mode(tmp_path) -> None:
     assert cube.storage_mode == "chunked"
     assert isinstance(cube.rho, ChunkedFieldReference)
     assert cube.shape == (4, 4, 4)
+
+
+def test_fluid_cube_chunked_reference_loads_original_values(tmp_path) -> None:
+    root = tmp_path / "chunked"
+    rho = np.arange(64, dtype=float).reshape(4, 4, 4)
+    pressure = np.full((4, 4, 4), 2.0)
+    zeros = np.zeros((4, 4, 4))
+    save_chunked_field("rho", rho, root, target_chunk_size=2)
+    save_chunked_field("prs", pressure, root, target_chunk_size=2)
+    save_chunked_field("v1", zeros, root, target_chunk_size=2)
+    save_chunked_field("v2", zeros, root, target_chunk_size=2)
+    save_chunked_field("v3", zeros, root, target_chunk_size=2)
+
+    cube = FluidCube(
+        rho=root / "rho",
+        pressure=root / "prs",
+        vx=root / "v1",
+        vy=root / "v2",
+        vz=root / "v3",
+    )
+
+    np.testing.assert_array_equal(cube.rho.load(), rho)
+
+
+@pytest.mark.parametrize("field_name", ["dx", "dy", "dz"])
+@pytest.mark.parametrize("bad_value", [0.0, -1.0, math.inf, math.nan])
+def test_fluid_cube_rejects_bad_scalar_metadata_in_memory(field_name: str, bad_value: float) -> None:
+    kwargs = {"dx": 1.0, "dy": 1.0, "dz": 1.0, "gamma": 5.0 / 3.0}
+    kwargs[field_name] = bad_value
+
+    with pytest.raises(ValueError, match=field_name if not math.isfinite(bad_value) else "strictly positive"):
+        FluidCube(
+            rho=np.ones((2, 2, 2)),
+            pressure=np.ones((2, 2, 2)),
+            vx=np.zeros((2, 2, 2)),
+            vy=np.zeros((2, 2, 2)),
+            vz=np.zeros((2, 2, 2)),
+            **kwargs,
+        )
+
+
+@pytest.mark.parametrize("bad_gamma", [1.0, 0.9, math.inf, math.nan])
+def test_fluid_cube_rejects_bad_gamma_in_memory(bad_gamma: float) -> None:
+    match = "greater than 1" if math.isfinite(bad_gamma) else "gamma must be finite"
+    with pytest.raises(ValueError, match=match):
+        FluidCube(
+            rho=np.ones((2, 2, 2)),
+            pressure=np.ones((2, 2, 2)),
+            vx=np.zeros((2, 2, 2)),
+            vy=np.zeros((2, 2, 2)),
+            vz=np.zeros((2, 2, 2)),
+            gamma=bad_gamma,
+        )
+
+
+@pytest.mark.parametrize("field_name", ["dx", "dy", "dz"])
+@pytest.mark.parametrize("bad_value", [0.0, -1.0, math.inf, math.nan])
+def test_fluid_cube_rejects_bad_scalar_metadata_in_chunked_mode(tmp_path, field_name: str, bad_value: float) -> None:
+    root = tmp_path / "chunked"
+    values = np.ones((4, 4, 4))
+    zeros = np.zeros((4, 4, 4))
+    save_chunked_field("rho", values, root, target_chunk_size=2)
+    save_chunked_field("prs", values, root, target_chunk_size=2)
+    save_chunked_field("v1", zeros, root, target_chunk_size=2)
+    save_chunked_field("v2", zeros, root, target_chunk_size=2)
+    save_chunked_field("v3", zeros, root, target_chunk_size=2)
+    kwargs = {"dx": 1.0, "dy": 1.0, "dz": 1.0, "gamma": 5.0 / 3.0}
+    kwargs[field_name] = bad_value
+
+    match = "must be finite" if not math.isfinite(bad_value) else "strictly positive"
+    with pytest.raises(ValueError, match=match):
+        FluidCube(
+            rho=root / "rho",
+            pressure=root / "prs",
+            vx=root / "v1",
+            vy=root / "v2",
+            vz=root / "v3",
+            **kwargs,
+        )
+
+
+@pytest.mark.parametrize("bad_gamma", [1.0, 0.9, math.inf, math.nan])
+def test_fluid_cube_rejects_bad_gamma_in_chunked_mode(tmp_path, bad_gamma: float) -> None:
+    root = tmp_path / "chunked"
+    values = np.ones((4, 4, 4))
+    zeros = np.zeros((4, 4, 4))
+    save_chunked_field("rho", values, root, target_chunk_size=2)
+    save_chunked_field("prs", values, root, target_chunk_size=2)
+    save_chunked_field("v1", zeros, root, target_chunk_size=2)
+    save_chunked_field("v2", zeros, root, target_chunk_size=2)
+    save_chunked_field("v3", zeros, root, target_chunk_size=2)
+    match = "greater than 1" if math.isfinite(bad_gamma) else "gamma must be finite"
+
+    with pytest.raises(ValueError, match=match):
+        FluidCube(
+            rho=root / "rho",
+            pressure=root / "prs",
+            vx=root / "v1",
+            vy=root / "v2",
+            vz=root / "v3",
+            gamma=bad_gamma,
+        )
 
 
 def test_fluid_cube_rejects_mixed_array_and_path_fields(tmp_path) -> None:
