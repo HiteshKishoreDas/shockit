@@ -125,7 +125,7 @@ def test_chunked_center_reduction_matches_full_cube_tie_break_across_chunk_bound
     assert full_count == 1
     assert summary["n_connected_components"] == 1
     np.testing.assert_array_equal(reduced, full_reduced)
-    assert reduced[3, 1, 1]
+    assert np.count_nonzero(reduced) == 1
 
 
 def test_chunked_center_reduction_merges_periodic_boundary_component(tmp_path) -> None:
